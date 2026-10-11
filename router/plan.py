@@ -486,7 +486,7 @@ def _insights_for(store: Any, user_id: str, *, refresh: bool = False) -> dict:
     compute_insights = funcs[0]
     try:
         try:
-            insights = compute_insights(store, user_id, max_runs=_insights_max_runs())
+            insights = compute_insights(store, user_id, max_runs=_insights_max_runs(), cache_ttl=60)
         except TypeError:
             insights = compute_insights(store, user_id)
     except Exception:  # noqa: BLE001

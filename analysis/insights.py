@@ -18,6 +18,7 @@ import json
 import math
 import os
 import statistics
+import time
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from typing import Any
@@ -166,23 +167,56 @@ def is_seeded_event(event: dict) -> bool:
 def load_rows(
     store: Any, user_id: str, *, max_runs: int = DEFAULT_MAX_RUNS, events_limit: int = EVENTS_LIMIT
 ) -> tuple[list[dict], list[dict], list[dict]]:
-    """(runs with their calls, flat calls, events) for one user. Never raises; missing pieces are empty."""
-    runs_raw = _safe(store.list_runs, user_id, limit=max_runs) or []
+    """(runs with their calls, flat calls, events) for one user. Never raises; missing pieces are empty.
+
+    One query per table: list_runs, list_calls_for_user (paged), list_events. Stores without
+    list_calls_for_user fall back to one get_run per run."""
+    runs_raw = [
+        r
+        for r in (_safe(store.list_runs, user_id, limit=max_runs) or [])
+        if isinstance(r, dict) and r.get("id")
+    ]
+    by_run: dict[str, list[dict]] = {}
+    if hasattr(store, "list_calls_for_user"):
+        offset = 0
+        for _ in range(CALLS_MAX_PAGES):
+            page = _safe(store.list_calls_for_user, user_id, limit=CALLS_PAGE_SIZE, offset=offset) or []
+            for call in page:
+                if isinstance(call, dict) and call.get("run_id"):
+                    by_run.setdefault(str(call["run_id"]), []).append(call)
+            if len(page) < CALLS_PAGE_SIZE:
+                break
+            offset += CALLS_PAGE_SIZE
+    else:
+        for run in runs_raw:
+            full = _safe(store.get_run, run["id"], user_id)
+            rows = (full or {}).get("calls") if isinstance(full, dict) else None
+            by_run[str(run["id"])] = [c for c in (rows or []) if isinstance(c, dict)]
     runs: list[dict] = []
     calls: list[dict] = []
     for run in runs_raw:
-        if not isinstance(run, dict) or not run.get("id"):
-            continue
-        full = _safe(store.get_run, run["id"], user_id)
-        if not isinstance(full, dict):
-            full = {**run, "calls": []}
-        rows = [c for c in (full.get("calls") or []) if isinstance(c, dict)]
-        full = {**full, "calls": rows}
+        rows = sorted(by_run.get(str(run["id"]), []), key=lambda c: str(c.get("started_at") or ""))
+        full = {**run, "calls": rows}
         runs.append(full)
         for call in rows:
             calls.append({**call, "run_id": call.get("run_id") or run["id"], "_run": full})
     events = [e for e in (_safe(store.list_events, user_id, limit=events_limit) or []) if isinstance(e, dict)]
     return runs, calls, events
+
+
+CALLS_PAGE_SIZE = 500
+CALLS_MAX_PAGES = 10
+
+_CACHE: dict[tuple[str, int], tuple[float, dict]] = {}
+
+
+def invalidate_insights(user_id: str | None = None) -> None:
+    """Drop cached reports (all, or one user's)."""
+    if user_id is None:
+        _CACHE.clear()
+        return
+    for key in [k for k in _CACHE if k[0] == user_id]:
+        _CACHE.pop(key, None)
 
 
 def _prepare(calls: list[dict], zone: Any) -> list[dict]:
@@ -336,7 +370,9 @@ def vendor_scorecards(calls: list[dict]) -> dict[str, dict]:
             "n_with_outcome": len(with_outcome),
         }
         if track == "quote":
-            amounts = [a for a in (_num(c["_outcome"].get("amount_usd")) for c in with_outcome) if a is not None]
+            amounts = [
+                a for a in (_num(c["_outcome"].get("amount_usd")) for c in with_outcome) if a is not None
+            ]
             card.update(
                 {
                     "n_quotes": len(amounts),
@@ -356,7 +392,11 @@ def vendor_scorecards(calls: list[dict]) -> dict[str, dict]:
                     "n_confirmed": len(confirmed),
                     "confirmed_rate": _rate(len(confirmed), len(with_outcome)),
                     "latest_slot_iso": next(
-                        (c["_outcome"].get("slot_iso") for c in reversed(with_outcome) if c["_outcome"].get("slot_iso")),
+                        (
+                            c["_outcome"].get("slot_iso")
+                            for c in reversed(with_outcome)
+                            if c["_outcome"].get("slot_iso")
+                        ),
                         None,
                     ),
                 }
@@ -373,7 +413,9 @@ def vendor_scorecards(calls: list[dict]) -> dict[str, dict]:
                     "n_reduced": actions.get("reduced", 0),
                     "n_canceled": actions.get("canceled", 0),
                     "n_refused": actions.get("refused", 0),
-                    "reduction_rate": _rate(actions.get("reduced", 0) + actions.get("canceled", 0), len(with_outcome)),
+                    "reduction_rate": _rate(
+                        actions.get("reduced", 0) + actions.get("canceled", 0), len(with_outcome)
+                    ),
                     "total_saved_usd_per_month": _round(sum(saved)) if saved else 0.0,
                     "avg_saved_usd": _mean(saved),
                     "latest_saved_usd": _round(saved[-1]) if saved else None,
@@ -489,7 +531,10 @@ def time_of_day(calls: list[dict], zone_name: str) -> dict:
                 "answer_rate": _rate(answered, len(rows)),
             }
         )
-    enough = len(terminal) >= MIN_TIME_OF_DAY_CALLS and sum(1 for b in buckets if b["n_calls"] >= MIN_BUCKET_CALLS) >= 2
+    enough = (
+        len(terminal) >= MIN_TIME_OF_DAY_CALLS
+        and sum(1 for b in buckets if b["n_calls"] >= MIN_BUCKET_CALLS) >= 2
+    )
     out: dict[str, Any] = {
         "timezone": zone_name,
         "n_calls": len(terminal),
@@ -507,7 +552,8 @@ def time_of_day(calls: list[dict], zone_name: str) -> dict:
         per_hour[c["_hour"]]["n_calls"] += 1
         per_hour[c["_hour"]]["n_answered"] += int(c["_done"])
     out["per_hour"] = {
-        str(h): {**v, "answer_rate": _rate(v["n_answered"], v["n_calls"])} for h, v in sorted(per_hour.items())
+        str(h): {**v, "answer_rate": _rate(v["n_answered"], v["n_calls"])}
+        for h, v in sorted(per_hour.items())
     }
     rated = [b for b in buckets if b["n_calls"] >= MIN_BUCKET_CALLS and b["answer_rate"] is not None]
     if rated:
@@ -546,7 +592,9 @@ def context_effect(calls: list[dict]) -> dict:
         track = first.get("track")
         if track == "quote":
             a0 = _num(first["_outcome"].get("amount_usd"))
-            later_amounts = [a for a in (_num(c["_outcome"].get("amount_usd")) for c in later) if a is not None]
+            later_amounts = [
+                a for a in (_num(c["_outcome"].get("amount_usd")) for c in later) if a is not None
+            ]
             if a0 is not None and later_amounts:
                 quote_vendors += 1
                 quote_first.append(a0)
@@ -563,15 +611,21 @@ def context_effect(calls: list[dict]) -> dict:
             sched_later.extend(int(bool(c["_outcome"].get("confirmed"))) for c in later)
 
     quote_delta = (
-        _round(statistics.fmean(quote_first) - statistics.fmean(quote_later)) if quote_first and quote_later else None
+        _round(statistics.fmean(quote_first) - statistics.fmean(quote_later))
+        if quote_first and quote_later
+        else None
     )
-    neg_delta = _round(statistics.fmean(neg_later) - statistics.fmean(neg_first)) if neg_first and neg_later else None
+    neg_delta = (
+        _round(statistics.fmean(neg_later) - statistics.fmean(neg_first)) if neg_first and neg_later else None
+    )
     return {
         "n_repeat_vendors": len(repeat),
         "n_first_calls": len(first_all),
         "n_later_calls": len(later_all),
         "n_later_with_prior_context": sum(1 for c in later_all if c.get("prior_context")),
-        "share_later_with_prior_context": _rate(sum(1 for c in later_all if c.get("prior_context")), len(later_all)),
+        "share_later_with_prior_context": _rate(
+            sum(1 for c in later_all if c.get("prior_context")), len(later_all)
+        ),
         "first_answer_rate": _rate(sum(1 for c in first_all if c["_done"]), len(first_all)),
         "later_answer_rate": _rate(sum(1 for c in later_all if c["_done"]), len(later_all)),
         "quote": {
@@ -601,8 +655,17 @@ def context_effect(calls: list[dict]) -> dict:
 # recommendations
 
 
-def _rec(kind: str, text: str, score: float, *, vendor_key: str | None = None, track: str | None = None, **evidence):
-    return {"kind": kind, "text": text, "score": round(score, 3), "vendor_key": vendor_key, "track": track, "evidence": evidence}
+def _rec(
+    kind: str, text: str, score: float, *, vendor_key: str | None = None, track: str | None = None, **evidence
+):
+    return {
+        "kind": kind,
+        "text": text,
+        "score": round(score, 3),
+        "vendor_key": vendor_key,
+        "track": track,
+        "evidence": evidence,
+    }
 
 
 def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dict]:
@@ -632,7 +695,11 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
                         best_quote_usd=card.get("best_quote_usd"),
                     )
                 )
-        if track == "schedule" and card.get("n_with_outcome", 0) >= 2 and (card.get("confirmed_rate") or 0) >= 0.75:
+        if (
+            track == "schedule"
+            and card.get("n_with_outcome", 0) >= 2
+            and (card.get("confirmed_rate") or 0) >= 0.75
+        ):
             recs.append(
                 _rec(
                     "book_first",
@@ -677,11 +744,20 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
                 )
         buckets = card.get("time_of_day") or {}
         if n_terminal >= MIN_VENDOR_CALLS_FOR_TIME_ADVICE and len(buckets) >= 2:
-            worst_key, worst = min(buckets.items(), key=lambda kv: (kv[1]["n_answered"] / kv[1]["n_calls"], -kv[1]["n_calls"]))
-            best_key, best = max(buckets.items(), key=lambda kv: (kv[1]["n_answered"] / kv[1]["n_calls"], kv[1]["n_calls"]))
+            worst_key, worst = min(
+                buckets.items(), key=lambda kv: (kv[1]["n_answered"] / kv[1]["n_calls"], -kv[1]["n_calls"])
+            )
+            best_key, best = max(
+                buckets.items(), key=lambda kv: (kv[1]["n_answered"] / kv[1]["n_calls"], kv[1]["n_calls"])
+            )
             worst_rate = worst["n_answered"] / worst["n_calls"]
             best_rate = best["n_answered"] / best["n_calls"]
-            if worst["n_voicemail"] >= 2 and worst["n_calls"] >= 2 and best["n_calls"] >= 2 and best_rate - worst_rate >= 0.4:
+            if (
+                worst["n_voicemail"] >= 2
+                and worst["n_calls"] >= 2
+                and best["n_calls"] >= 2
+                and best_rate - worst_rate >= 0.4
+            ):
                 recs.append(
                     _rec(
                         "time_of_day",
@@ -714,7 +790,11 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
             )
 
     quote = effect.get("quote") or {}
-    if (quote.get("n_vendors") or 0) >= 2 and quote.get("later_lower_by_usd") is not None and quote["later_lower_by_usd"] > 0:
+    if (
+        (quote.get("n_vendors") or 0) >= 2
+        and quote.get("later_lower_by_usd") is not None
+        and quote["later_lower_by_usd"] > 0
+    ):
         recs.append(
             _rec(
                 "context_effect",
@@ -726,7 +806,11 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
             )
         )
     neg = effect.get("negotiate") or {}
-    if (neg.get("n_vendors") or 0) >= 1 and neg.get("later_saved_more_usd") is not None and neg["later_saved_more_usd"] > 0:
+    if (
+        (neg.get("n_vendors") or 0) >= 1
+        and neg.get("later_saved_more_usd") is not None
+        and neg["later_saved_more_usd"] > 0
+    ):
         recs.append(
             _rec(
                 "context_effect",
@@ -737,7 +821,12 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
                 **neg,
             )
         )
-    if tod.get("enough_data") and tod.get("best_bucket") and tod.get("worst_bucket") and tod["best_bucket"] != tod["worst_bucket"]:
+    if (
+        tod.get("enough_data")
+        and tod.get("best_bucket")
+        and tod.get("worst_bucket")
+        and tod["best_bucket"] != tod["worst_bucket"]
+    ):
         by_key = {b["bucket"]: b for b in tod["buckets"]}
         best, worst = by_key[tod["best_bucket"]], by_key[tod["worst_bucket"]]
         if (best["answer_rate"] or 0) - (worst["answer_rate"] or 0) >= 0.2:
@@ -746,7 +835,9 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
                     "time_of_day_overall",
                     f"Across all vendors calls {best['label']} are answered {best['n_answered']} of {best['n_calls']} times "
                     f"versus {worst['n_answered']} of {worst['n_calls']} {worst['label']}; schedule fan-outs {best['label']}.",
-                    1.5 * ((best["answer_rate"] or 0) - (worst["answer_rate"] or 0)) * math.log1p(tod["n_calls"]),
+                    1.5
+                    * ((best["answer_rate"] or 0) - (worst["answer_rate"] or 0))
+                    * math.log1p(tod["n_calls"]),
                     best_bucket=best["bucket"],
                     worst_bucket=worst["bucket"],
                     best=best,
@@ -763,7 +854,9 @@ def recommendations(cards: dict[str, dict], effect: dict, tod: dict) -> list[dic
 # coverage and the report
 
 
-def coverage(runs: list[dict], calls: list[dict], events: list[dict], *, max_runs: int, events_limit: int) -> dict:
+def coverage(
+    runs: list[dict], calls: list[dict], events: list[dict], *, max_runs: int, events_limit: int
+) -> dict:
     starts = [c["_started"] for c in calls if c["_started"]]
     n_calls = len(calls)
     n_simulated = sum(1 for c in calls if c.get("simulated"))
@@ -810,8 +903,22 @@ def compute_insights(
     max_runs: int = DEFAULT_MAX_RUNS,
     events_limit: int = EVENTS_LIMIT,
     tz: str | None = None,
+    cache_ttl: float | None = None,
 ) -> dict:
-    """The insights report for one user. JSON-serializable, null-safe, never raises on bad rows."""
+    """The insights report for one user. JSON-serializable, null-safe, never raises on bad rows.
+
+    cache_ttl: when set, a report computed within that many seconds for the same (user, max_runs) is
+    returned instead of recomputing. The dispatch path and the insights route share one computation."""
+    if cache_ttl:
+        key = (user_id, max_runs)
+        hit = _CACHE.get(key)
+        if hit and time.monotonic() - hit[0] < cache_ttl:
+            return hit[1]
+        report = compute_insights(
+            store, user_id, now=now, max_runs=max_runs, events_limit=events_limit, tz=tz
+        )
+        _CACHE[key] = (time.monotonic(), report)
+        return report
     now = now or datetime.now(UTC)
     zone = _zone(tz)
     runs, raw_calls, events = load_rows(store, user_id, max_runs=max_runs, events_limit=events_limit)

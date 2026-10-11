@@ -392,7 +392,7 @@ def test_prior_context_prefers_insights_then_falls_back(monkeypatch):
     assert router.prior_context_detail(store, "u1", "swift", "quote")["source"] == "last_outcome"
     assert router.prior_context_detail(store, "u1", "chen", "schedule") == {"text": None, "source": "none"}
     assert fake.compute_calls == 1
-    assert fake.compute_kwargs[0] == {"max_runs": router.DEFAULT_INSIGHTS_MAX_RUNS}
+    assert fake.compute_kwargs[0] == {"max_runs": router.DEFAULT_INSIGHTS_MAX_RUNS, "cache_ttl": 60}
 
 
 def test_insights_failures_fall_back_quietly(monkeypatch):
