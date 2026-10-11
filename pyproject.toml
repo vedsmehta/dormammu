@@ -1,0 +1,29 @@
+[project]
+name = "dormammu"
+version = "0.1.0"
+description = "Parallel AI phone calls for phone-gated bottlenecks"
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "livekit-agents[silero]~=1.8",
+    "dial-sdk>=0.40.2",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+addopts = "-rs"
+markers = ["live: hits real APIs; skipped unless the needed keys are in test/.env"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
