@@ -1,5 +1,5 @@
 import { getSupabaseBrowser } from "@/lib/supabase/client";
-import type { AssembledRun, Call, LedgerRow, Profile, RunListItem, Vendor } from "@/lib/types";
+import type { AssembledRun, Call, LedgerRow, Profile, ResearchItem, RunListItem, Vendor } from "@/lib/types";
 
 // Browser-side client for the Python service. Every call goes to /api/py/..., which next.config
 // rewrites to uvicorn in dev and to the Vercel Python function in production. The Supabase access
@@ -48,6 +48,10 @@ export const getRuns = () => pyFetch<RunListItem[]>("/runs");
 export const createRun = (request: string) => post<AssembledRun>("/runs", { request });
 export const getRun = (id: string) => pyFetch<AssembledRun>(`/runs/${encodeURIComponent(id)}`);
 export const tickRun = (id: string) => post<AssembledRun>(`/runs/${encodeURIComponent(id)}/tick`, {});
+
+/** Research (server/app.py POST /research): verified vendors with sourced phones; nothing is dialed. */
+export const research = (request: string) =>
+  post<{ id: string; proposal: { items: ResearchItem[]; errors?: string[] } }>("/research", { request });
 
 export const getVendors = () => pyFetch<Vendor[]>("/vendors");
 export const upsertVendors = (vendors: Vendor[]) => post<Vendor[]>("/vendors", { vendors });

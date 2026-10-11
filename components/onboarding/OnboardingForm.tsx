@@ -7,7 +7,7 @@ import { fromSlots, toSlots, type Slot } from "@/components/profile/availability
 import { AvailabilityEditor } from "@/components/profile/AvailabilityEditor";
 import { AuthShell, Progress } from "@/components/shell";
 import { ErrorNote, Field } from "@/components/ui";
-import { getProfile, getVendors, upsertProfile, upsertVendors } from "@/lib/api";
+import { getProfile, getVendors, research, upsertProfile, upsertVendors } from "@/lib/api";
 import { describeError } from "@/lib/format";
 import {
   BEDROOMS,
@@ -82,6 +82,18 @@ function mergeRoster(fromApi: Vendor[]): Vendor[] {
   return rows;
 }
 
+/** Researched vendors with a phone confirmed on a cited page, as roster rows. */
+async function fetchVendors(city: string, state: string): Promise<Vendor[]> {
+  const where = [city, state].filter(Boolean).join(", ");
+  const row = await research(`I'm moving to ${where}: find movers, internet, renters insurance and a dentist`);
+  const seen = new Set<string>();
+  return (row.proposal?.items ?? [])
+    .filter((it) => it.phone_verified && !it.skip_reason && it.vendor.phone)
+    .sort((a, b) => Number(b.recommended) - Number(a.recommended))
+    .filter((it) => (seen.has(it.vendor.phone!) ? false : (seen.add(it.vendor.phone!), true)))
+    .map((it) => ({ key: it.vendor.key, name: it.vendor.name, track: it.track, phone: it.vendor.phone!, is_demo: false }));
+}
+
 /** Street, city, state, zip as four underline fields. */
 function AddressFields({ legend, value, onChange }: { legend: string; value: AddressDraft; onChange: (a: AddressDraft) => void }) {
   const set = (patch: Partial<AddressDraft>) => onChange({ ...value, ...patch });
@@ -129,6 +141,9 @@ export function OnboardingForm() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [filling, setFilling] = useState(false);
+  const [fillNote, setFillNote] = useState<string | null>(null);
+  const [filledFor, setFilledFor] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +205,41 @@ export function OnboardingForm() {
     setProviders((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addProvider = () => setProviders((rows) => [...rows, { category: "internet", name: "", monthly_usd: "", contract_end: "" }]);
   const removeProvider = (i: number) => setProviders((rows) => rows.filter((_, idx) => idx !== i));
+
+  /** Prefill names and numbers from research for the city you are moving to. Keeps rows already typed. */
+  const autofill = async (city = newAddress.city.trim(), state = newAddress.state.trim()) => {
+    if (!city || filling) return;
+    setFilling(true);
+    setFillNote(null);
+    try {
+      const found = await fetchVendors(city, state);
+      setFilledFor(city.toLowerCase());
+      if (found.length === 0) {
+        setFillNote(`No vendors with a verified phone found for ${city} yet. You can add them below.`);
+        return;
+      }
+      setVendors((rows) => {
+        const kept = rows.filter((r) => r.phone.trim());
+        const phones = new Set(kept.map((r) => r.phone.replace(/\D/g, "")));
+        return [...kept, ...found.filter((f) => !phones.has(f.phone.replace(/\D/g, "")))];
+      });
+      setFillNote(`Filled in ${found.length} vendors for ${city}, each phone checked against a cited source.`);
+    } catch (err) {
+      setFillNote(`Couldn't fetch vendors (${describeError(err)}). You can add them below.`);
+    } finally {
+      setFilling(false);
+    }
+  };
+
+  // Once the destination city is known and nobody has a phone yet, fetch them without being asked.
+  useEffect(() => {
+    const city = newAddress.city.trim();
+    if (!loaded || city.length < 3 || filledFor === city.toLowerCase()) return;
+    if (vendors.some((v) => v.phone.trim())) return;
+    const t = setTimeout(() => autofill(city, newAddress.state.trim()), 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, newAddress.city, newAddress.state, filledFor]);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -387,11 +437,17 @@ export function OnboardingForm() {
         <AvailabilityEditor slots={slots} onChange={setSlots} />
 
         <fieldset className="field">
-          <legend>I already know who to call</legend>
+          <legend>Who Dormammu will call</legend>
           <p className="hint">
-            Optional. Only rows here are dialable: the router picks by key and never sees a number. Today every number belongs to someone
-            in the room.
+            Filled in automatically from research for the city you are moving to: only numbers found on a cited page are kept. Edit or add
+            rows if you like; the router picks by key and never sees a number.
           </p>
+          <p className="hint">
+            <button type="button" className="add" onClick={() => autofill()} disabled={filling || !newAddress.city.trim()}>
+              {filling ? "Finding vendors…" : newAddress.city.trim() ? `↻ Find vendors in ${newAddress.city.trim()}` : "Enter the city you are moving to first"}
+            </button>
+          </p>
+          {fillNote ? <p className="note">{fillNote}</p> : null}
           <ul className="roster">
             {vendors.map((v, i) => (
               <li key={i}>

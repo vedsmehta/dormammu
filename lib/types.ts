@@ -245,3 +245,14 @@ export interface NewLedgerRow {
   expires_on: string | null;
   amount_usd: number | null;
 }
+
+/** One researched vendor from POST /research (research/schemas.py Item), the fields autofill reads. */
+export interface ResearchItem {
+  id: string;
+  category: string;
+  track: Track;
+  vendor: { key: string; name: string; phone?: string | null; website?: string | null };
+  phone_verified: boolean;
+  recommended: boolean;
+  skip_reason?: string | null;
+}
