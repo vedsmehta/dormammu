@@ -8,10 +8,9 @@ import { research } from "@/lib/api";
 import { describeError } from "@/lib/format";
 
 const PLACEHOLDER = "What do you need handled?";
-const RESEARCH_PLACEHOLDER = "What should Dormammu research?";
 
 // The example chips from the prototype's ask box. They only fill the input; nothing is sent until
-// one of the two buttons is pressed.
+// "Handle it".
 const EXAMPLES: { label: string; fill: string }[] = [
   { label: "Moving in", fill: "I'm moving into my first apartment near campus on the 1st, handle it." },
   { label: "Lower a bill", fill: "My phone bill is too high, get it down." },
@@ -19,50 +18,43 @@ const EXAMPLES: { label: string; fill: string }[] = [
   { label: "Cancel something", fill: "Cancel the subscriptions I don't use." },
 ];
 
-type Busy = null | "research" | "roster";
-type Failure = { from: Busy; request: string; message: string };
-
-const d = (s: string) => ({ "--d": s }) as CSSProperties;
-
 /**
  * The ask box from dashboard.html. POST /api/py/research looks up options first and dials nobody; the
  * button shows that wait, then we route to the proposal, where the user approves who gets called.
  */
-export function RequestForm({ autoFocus = true, variant = "home" }: { autoFocus?: boolean; variant?: "home" | "research" }) {
+export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
   const router = useRouter();
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState<Busy>(null);
-  const [failure, setFailure] = useState<Failure | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const request = text.trim();
-  const locked = busy !== null;
-
-  const researchFirst = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!request || locked) return;
-    setBusy("research");
-    setFailure(null);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const request = text.trim();
+    if (!request || busy) return;
+    setBusy(true);
+    setError(null);
     try {
       const proposal = await research(request);
       router.push(`/proposals/${proposal.id}`);
     } catch (err) {
-      setFailure({ from: "roster", request: which, message: describeError(err) });
-      setBusy(null);
+      setError(describeError(err));
+      setBusy(false);
     }
   };
 
   return (
     <>
-      <form onSubmit={researchFirst} className="askbox rise" style={d(".2s")}>
+      <form onSubmit={submit} className="askbox rise" style={{ "--d": ".2s" } as CSSProperties}>
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={variant === "research" ? RESEARCH_PLACEHOLDER : PLACEHOLDER}
-          aria-label={variant === "research" ? RESEARCH_PLACEHOLDER : PLACEHOLDER}
+          placeholder={PLACEHOLDER}
+          aria-label={PLACEHOLDER}
           autoFocus={autoFocus}
           autoComplete="off"
-          disabled={locked}
+          disabled={busy}
         />
         <button type="submit" className="btn btn-primary" disabled={busy || text.trim().length === 0}>
           {busy ? "Researching…" : "Handle it"}

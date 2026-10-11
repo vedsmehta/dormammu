@@ -10,7 +10,6 @@ import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client"
 
 const LINKS = [
   { href: "/", label: "Dashboard" },
-  { href: "/research", label: "Research" },
   { href: "/calls", label: "Calls" },
   { href: "/ledger", label: "Ledger" },
   { href: "/calendar", label: "Calendar" },
@@ -22,7 +21,6 @@ const LINKS = [
 // The tab bar icons from the prototype's app pages, in the same order as LINKS.
 const ICONS = [
   "M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z",
-  "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM20 20l-4.6-4.6",
   "M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z",
   "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01",
   "M4 20v-7M10 20V5M16 20v-10M22 20H2",
