@@ -140,30 +140,115 @@ updates. This is what answers "isn't this a one-time tool?"
 
 ## 6. Keewano integration (core MVP, not a stretch goal)
 
-Keewano's current product (KeewanoDB, launched Sept 2026) is a general event-sequence
-database for AI agents, not gaming-locked despite the "gaming analytics" label —
-agents are first-class entities in its data model.
+Keewano's current product (KeewanoDB, launched Sept 2026) is an event-sequence
+database: it stores each entity's events together and in order, so "what sequence
+led to this outcome?" is a fast scan instead of a reconstruction. Not gaming-locked
+despite the "gaming analytics" label. Docs: docs.keewano.com.
 
-**What it does for Dormammu:**
-- Every call (each caller-agent, each turn, each tool-call, each outcome) is logged
-  to KeewanoDB as an ordered event sequence per entity (one entity per call/agent run).
-- Use **Keewano MCP for Agents** to query those sequences for patterns: which event
-  sequences precede a failed negotiation vs. a successful one, which IVR navigation
-  paths dead-end, which call scripts get hung up on.
-- Feed those patterns back into the per-track call scripts/prompts — this is the
-  "continually improve the agentic stack" loop: Keewano powers the analysis step,
-  we close the loop by updating prompts/logic based on what it surfaces.
-- The same sequences, aggregated across users, are what make the ledger (§2.1)
-  smarter over time: what a given vendor's retention line actually concedes, and
-  what rate comparable students ended up with.
+### 6.1 What it does for Dormammu
+
+- Every call is logged as one ordered event sequence (**one Keewano entity = one
+  call attempt**).
+- **Keewano MCP for Agents** is queried for patterns: which sequences precede a
+  failed negotiation vs. a successful one, which IVR paths dead-end, which scripts
+  get hung up on, which vendors grant the student rate when asked.
+- Those findings drive the next script/prompt revision. Keewano powers the
+  analysis step; we close the loop by editing prompts.
+- The same sequences, aggregated across users, make the ledger (§2.1) smarter:
+  what a vendor's retention line actually concedes, what comparable students pay.
 - Honest scope note: Keewano analyzes and surfaces patterns, it does not
   auto-rewrite prompts. The improvement loop is Keewano-informed, not fully
-  autonomous — state this plainly in the pitch rather than overclaiming.
+  autonomous. Say this plainly in the pitch.
 
-**Setup:** install `@getdial/sdk`-equivalent via Keewano's TypeScript SDK
-(`Keewano.init({ apiKey })`), ship call events via SDK or REST, query via MCP/Lua.
-No hackathon-specific quickstart page found for Keewano (unlike Dial's) — check
-their booth/Discord at the event for a demo API key or sandbox dataset.
+### 6.2 Data model
+
+- **Entity id:** a UUID per call attempt (Keewano requires a UUID or integer, so
+  the LiveKit room name `call-<hex>` cannot be used directly). Store it on
+  `CallResult` so ledger rows and Keewano sequences join up.
+- **Events:** custom events, ids assigned as `2500 + position` in
+  `keewano.events.json`, typed helpers generated with `npx keewano-codegen`.
+  **Append only, never reorder or delete** once data has been sent.
+- **Each event carries exactly one value** (`none`, `string`, `uint`, `bool`,
+  `timestamp`, `price_usd_cent`). Rich results are split across several events.
+
+| # | Event | Value | Source |
+|---|---|---|---|
+| 2500 | CallStarted | none | dispatch |
+| 2501 | RequestId | string (groups one user request's fan-out) | dispatch |
+| 2502 | CallTrack | string: `quote` / `schedule` / `bill` / `retention` | dispatch |
+| 2503 | CallVendor | string | dispatch |
+| 2504 | Channel | string: `voice` / `sms` | dispatch |
+| 2505 | AttemptNumber | uint (SMS fallback kicks in after N) | dispatch |
+| 2506 | ScriptVersion | string, e.g. `quote-v2` | dispatch |
+| 2507 | EligibilityProfile | string: `student`, ... | dispatch |
+| 2508 | IvrOptionPressed | string (digit) | agent: `send_dtmf_events` tool calls |
+| 2509 | HoldReached | none | transcript extraction |
+| 2510 | HumanReached | none | transcript extraction |
+| 2511 | VoicemailReached | none | transcript extraction |
+| 2512 | DiscountAsked | string (`student`, ...) | transcript extraction |
+| 2513 | DiscountGranted | price_usd_cent (monthly saving) | transcript extraction |
+| 2514 | ProofRequested | string (e.g. `enrollment letter`) | transcript extraction |
+| 2515 | QuoteReceived | price_usd_cent | `CallResult.details` |
+| 2516 | AppointmentBooked | timestamp | `CallResult.details` |
+| 2517 | NewRate | price_usd_cent | `CallResult.details` |
+| 2518 | CancellationConfirmed | none | `CallResult.details` |
+| 2519 | CallStatus | string: `completed` / `no_answer` / `failed` / `timeout` | `CallResult.status` |
+| 2520 | CallFailed | string (error/reason) | `CallResult.error` |
+| 2521 | CallDurationSec | uint | `CallResult.duration_seconds` |
+| 2522 | CallOutcome | string: `success` / `failed` / `partial` | `CallResult.success` |
+
+### 6.3 Where events are emitted
+
+- **One module** (`analytics/keewano.py`), called **once per call after it ends**,
+  from `call.dispatch.run_calls` where every `CallResult` comes back, including
+  timeouts and failures the agent never writes itself.
+- **Ingest via REST, one batch per call:** `POST
+  https://api.keewano.com/event/ingress/v1/json/in` with header `k-token`, the
+  call's UUID as the batch `userId`, events in order with timestamps from call
+  start. Do not use the Python SDK here: its user id is process-global
+  (`set_user_id`), which doesn't fit many concurrent calls.
+- **Transcript extraction:** one LLM pass over `CallResult.transcript` returns the
+  "transcript extraction" events above. The aggregator already has to parse each
+  call's result, so do it there.
+- **Required code changes:**
+  - `CallRequest` gains `track`, `vendor`, `channel`, `attempt`,
+    `script_version`, `eligibility_profile` and `request_id`.
+  - `Caller` records each DTMF key it sends.
+  - `CallResult` gains `keewano_id`.
+- **Never block or fail a call on analytics:** if `KEEWANO_API_KEY` is unset or
+  the POST fails, log a warning and continue.
+- Voice-stack independent: the module consumes `CallRequest`/`CallResult` only,
+  so it is unaffected by LiveKit vs. Dial's own voice agent.
+
+### 6.4 Improvement loop (and the demo beat)
+
+1. Run calls with script `v1` → sequences land in Keewano (queryable ~5 min).
+2. Ask via MCP: "Compare CallOutcome by ScriptVersion" and "What sequences
+   precede CallOutcome=failed vs success?"
+3. Edit the script per the finding (e.g. ask for a representative at the first
+   IVR prompt; ask for the student rate before quoting), bump to `v2`.
+4. Re-run, compare success rate v1 vs v2.
+
+For the video, stage one full turn of this loop against our test lines: v1 gets
+lost in the IVR, Keewano surfaces it, v2 fixes it, success rate goes up. A seed
+script that posts synthetic v1/v2 calls lets the MCP queries be rehearsed before
+real calls exist.
+
+### 6.5 Setup (SpeedHacks quickstart: docs.keewano.com/getting-started/speedhacks-quickstart)
+
+1. Sign up at keewano.com, create a project.
+2. In the in-app chat (bottom-left of app.keewano.com) send `#SpeedHacks`. This
+   unlocks no limits, MCP access and team seats.
+3. **Project API key** (writes events): Settings → Project → API Keys →
+   `KEEWANO_API_KEY` in `test/.env`.
+4. **Personal access token** (reads, `kwpat-...`): Settings → Personal → Security.
+   The two credentials are not interchangeable (wrong one → `403`).
+5. Connect Claude Code:
+   `claude mcp add --scope user --transport http keewano https://api.keewano.com/mcp --header "k-token: $KEEWANO_PAT"`
+6. Onsite support: Vitaly Bukhovsky (co-founder/CPO), Karen Teboulle (VP Growth).
+
+**Done when:** a dispatched batch of calls appears in Keewano as one sequence per
+call, and an MCP query returns success rate by `ScriptVersion`.
 
 ## 7. Competitive landscape
 
@@ -190,8 +275,10 @@ than asking for the discounts a specific user is actually eligible for.
 
 - Verify any third-party mock-data APIs (e.g. insurance quote sandboxes) are
   actually reachable before depending on them; prefer our own fixtures.
-- Keewano hackathon-day setup (API key, sandbox dataset) unconfirmed — check with
-  Keewano reps at the event.
+- Keewano custom-event payloads hold a single value, and ordering within one REST
+  batch should be confirmed with Keewano reps (we rely on per-event timestamps).
+- Hold time, human pickup and IVR depth aren't reported by the voice stack; they
+  come from transcript extraction and are only as good as that LLM pass.
 - Recording-consent rules apply even for a pre-recorded demo if real vendors/humans
   are called and included in the submitted video — get verbal consent on-call or
   use our own test line's human to stay safe.
