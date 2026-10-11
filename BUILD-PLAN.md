@@ -2,9 +2,7 @@
 
 **For:** Fable, executing end-to-end across parallel worktree lanes.
 **Written:** 12:45 PDT, Oct 11 2026. **Record at 15:15. Submit by 15:45. Hard cutoff 16:00.**
-**Stack:** TypeScript end-to-end. Next.js 15 App Router on Vercel. **Supabase** (Postgres + Auth +
-Realtime) as the single persistence layer. Anthropic for routing and extraction. Dial for calls.
-Keewano as a secondary event sink.
+**Stack:** **Python core (already built, keep it) + Next.js/Supabase web layer.** See §0 first.
 **Deliverable:** two things, not one. A recorded video of one plain-language request fanning out
 into N simultaneous real phone calls. And a real product behind it: auth, a durable event
 database, and data that survives the demo, because **the GitHub repo is being shared with judges.**
@@ -12,9 +10,97 @@ database, and data that survives the demo, because **the GitHub repo is being sh
 This plan has been through an engineering review. 21 findings were raised and resolved; each
 resolution is marked `[review N<letter>]` at the point it applies. §9 is the review record.
 
-Read §1 and §2 before writing code. §3 is the schema. §4 is the file-by-file contract. §5 is the
-lane assignment. **Read it before starting, because four agents run concurrently.** §6 is the
-timeline with abort gates.
+**Read §0 before anything else.** §0 reconciles this plan with the code that already exists on
+`origin/main`. Then §1 and §2 before writing code (§2 is API ground truth and is correct
+regardless of language). §3 is the schema. §4 is the component contract. §5 is the lane
+assignment. §6 is the timeline with abort gates. §12 is added scope.
+
+---
+
+## 0. Repo reality: read this first
+
+**§1 through §11 were drafted against a greenfield TypeScript repo. That was wrong.** The local
+checkout was stale; `origin/main` already has working, merged, tested Python. Nothing below
+is a reason to delete that code.
+
+### What already exists and must be kept
+
+| Piece | File | State |
+|---|---|---|
+| **Concurrent fan-out** | `call/dispatch.py` → `run_calls()` | **Done.** `asyncio.gather` over an `asyncio.Semaphore`, bounded by `MAX_CONCURRENT_CALLS` (default 10), per-call timeout, exceptions captured into a failed `CallResult`. **Do not rebuild the fan-out. It is the thesis and it already works.** |
+| **Frozen data contract** | `call/models.py` → `CallRequest` / `CallResult` | **Done and frozen.** `CallRequest{to, task, fields, caller_name}`, `CallResult{room, to, status, success, summary, details, transcript, duration_seconds, error}`. A field addition is a 2-line change proposed to the group, never a silent fork. |
+| **Result persistence seam** | `call/models.py` → `write_result` / `read_result` / `result_path` | Done, file-based JSON in `.calls/` with a tmp-then-rename atomic write. **This is the seam Supabase goes behind.** |
+| **SMS** | `sms/messenger.py` | Done, already on Dial. |
+| **Voice call placement** | `call/agent.py`, `run_call()` in `dispatch.py` | Done **on LiveKit**, being migrated to Dial. This is the team's Risk #1. |
+| **Tests** | `test/test_call.py`, `test/test_sms.py`, `test/conftest.py` | Exist. pytest + pytest-asyncio, `asyncio_mode = "auto"`, a `live` marker for real-API tests. |
+| **Config** | `settings.py` | `load_env()`, `env()`, `results_dir()`. Python/uv project, ruff at line-length 110. |
+
+Team context: `docs/epic-mvp-oct11.md`, tracking issue #4, child issues #5 router, #6 test-lines,
+#7 aggregator+ledger, #8 dashboard, #9 Keewano. Four people are working these concurrently.
+
+### The three decisions that reshape this plan
+
+1. **Python core stays, Next.js + Supabase is the web layer only.** `call/`, `sms/`, `settings.py`
+   and the `uv` project are untouched except for the Dial migration. The TypeScript file specs in
+   §4 apply to the **web layer**; the call-placing and ingest specs map onto the Python modules
+   per the table below.
+2. **Supabase goes behind `write_result` / `read_result`.** Swap those two function bodies in
+   `call/models.py` to hit Postgres instead of `.calls/*.json`. Every caller, including
+   `dispatch.py`'s `wait_for_result` poll loop, is unchanged. The frozen contract holds. That is
+   roughly a 20-line change at one seam and it buys durability, auth and Realtime. Keep
+   `result_path` working so the file path remains a fallback.
+3. **Risk #1 is already resolved. Do not spend 30-45 minutes on the DTMF spike.** From the
+   OpenAPI spec (§2.1):
+   - **The agent cannot send DTMF.** There is no outbound-keypress capability anywhere in the
+     API. DTMF appears only in the self-hosted audio protocol, receive-only. Any demo built on
+     pressing menu keys will fail.
+   - **`transferTo` makes it unnecessary.** It makes the agent "wait for a real human (riding out
+     hold music and IVR menus)" and then cold-transfer. Dial navigates menus itself.
+   - So the epic's Definition of Done item 1, "successfully navigating at least one DTMF menu",
+     **is not achievable as written** and should be restated in terms of `transferTo`.
+   - Also: every path is `/api/v1/...` (docs pages showing `/v1/numbers` 404), and `voiceGender`
+     is per-call despite a docs page claiming it is number-locked.
+
+### How §3 and §4 map onto the real tree
+
+| §4 spec | Where it actually lives |
+|---|---|
+| `lib/types.ts` | **Already exists** as `call/models.py`. Do not create a parallel contract. The web layer gets a thin TS mirror of `CallResult`, generated from the Supabase schema, never hand-maintained. |
+| `lib/dial.ts`, `mapDialState` | `call/dial_client.py` + the `run_call()` rewrite. `mapDialState` becomes a Python function mapping Dial status onto the existing `CallStatus` literal (`pending/answered/completed/no_answer/failed/timeout`), which already covers it. |
+| `lib/ingest.ts` | The result-collection path in `dispatch.py`. The **voicemail guard `[review 17A]` goes here** and is still required. |
+| `lib/router.ts` | `router/` package, issue #5. Plan cache `[review 2A]` and never-throw `[review 6A]` both still apply. |
+| `lib/extract.ts` | Fills `CallResult.details` / `.summary`. **`[review 13A]` still applies and is still the most dangerous bug: wait for the transcript to exist, do not extract on hangup.** |
+| `lib/aggregate.ts` | `aggregator/` package, issue #7. Honest-multiplier rules (§4.9) still apply. |
+| `lib/simulate.ts` | Still needed `[review 18A]`. Writes scripted `CallResult`s through `write_result`. |
+| §3 schema | Still correct, with `calls` reshaped to hold the frozen `CallResult` fields. Add the `ledger` and `profiles.cohort` tables from §12. |
+| `app/**`, auth, MCP | Net-new Next.js, issue #8. Unchanged from §4.10-§4.12. |
+
+### Which review findings survive the stack change
+
+**Still apply, unchanged in substance:** 2A plan cache, 4A MCP bearer auth, 6A router never
+throws, 7A phone numbers out of git (now the `vendors` table), 8A one state-mapping function,
+11A stop polling when terminal, **13A extraction waits for the transcript**, 14A monotonic state,
+**17A voicemail guard**, 18A labeled simulated rows, and the §4.9 honest-metrics rules.
+
+**Changed or moot:** 3A and 9A are now free, because one row per call and the atomic
+`UPDATE … RETURNING` claim come with Postgres (§3.3) once decision 2 lands. 1A and 15A are
+already true: the existing design polls (`wait_for_result`) and has no webhook. 5A is satisfied
+by there being one `run_call` path. 10A is moot with no webhook. 12A and 21A are superseded by
+§5 and the team's own issue split.
+
+### Lane mapping to the team's issues
+
+| §5 lane | Issue | Note |
+|---|---|---|
+| A, critical path | Risk #1 Dial migration | Now much smaller: `transferTo`, no DTMF spike |
+| A | #5 router, #7 aggregator | Build against mocked `CallResult`, as the epic already says |
+| B, auth + MCP | #8 dashboard | Next.js + Supabase + the Context MCP calendar (§12.4) |
+| C, events | #9 Keewano | Unchanged, including the 15-minute abort |
+| D, pure functions | #5/#7 internals + tests | pytest, not vitest. Same four test targets (§4.14) |
+
+**Fable: apply §0 and §12 as deltas. Do not rewrite §1-§11 to change the language; read them for
+the architecture, the review findings, and the API ground truth, and implement against the real
+tree.**
 
 ---
 
@@ -1034,6 +1120,91 @@ them are load-bearing.
 
 ---
 
+## 12. Added scope: notes for Fable
+
+Four items the epic doc commits to (or cut) that §1-§11 does not cover. **These are notes, not
+full specs.** Fable designs the details; the constraints below are the parts that matter.
+
+### 12.1 Ledger (issue #7)
+
+Persists dated obligations so the product has a reason to exist between runs. Without it there is
+no second act.
+
+```sql
+create table ledger (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references profiles(id) on delete cascade,
+  vendor_id    uuid references vendors(id) on delete set null,
+  kind         text not null check (kind in ('promo_expiry','renewal','appointment','quote')),
+  label        text not null,
+  amount_usd   numeric,
+  effective_on date,
+  expires_on   date,                    -- the trigger date for act two
+  source_call  uuid references calls(id) on delete set null,
+  created_at   timestamptz not null default now()
+);
+create index on ledger (user_id, expires_on);
+```
+
+- Written by the aggregator when a `CallResult` yields a dated fact (a promo that ends, a renewal
+  date, a booked slot).
+- `source_call` is what makes it defensible: every ledger row traces to a transcript.
+- The dashboard renders this as a timeline, which is the "nobody tracks all of this against
+  actual spend" line in the PRD appendix made concrete.
+- Date-based triggers only. Bill ingestion from email or bank is cut (epic doc).
+
+### 12.2 Eligibility / cohort profiles (issue #5)
+
+A config object, not a system. Ships with `student` only, built so a second cohort is a one-line
+swap. Lives on `profiles.cohort` plus a `cohorts` config in the router package.
+
+```python
+{"key": "student", "label": "full-time student",
+ "asks": ["student rate", "waive activation fee", "no-contract term"],
+ "proof": "university email on file"}
+```
+
+The router injects the cohort's `asks` into each `CallRequest.task`, so the agent asks for the
+student rate without the user thinking to. Keep the asks in config, not in the prompt template,
+so they are inspectable and so a judge can see what the agent is instructed to claim.
+
+**Honesty constraint (§8.4):** the agent may only assert eligibility the user actually has. Never
+let the model infer or embellish a cohort claim. Senior and military cohorts are cut today.
+
+### 12.3 Two-act demo structure (§6, recording)
+
+The epic's two-act framing is a better video than §6's single act, and it is the Keewano context
+loop made visible rather than asserted.
+
+- **Act one:** "I'm moving to SF next month, handle it" → the N-call fan-out, the ranked table,
+  one ledger row written with an `expires_on` eleven months out.
+- **Act two:** "11 months later." Advance the clock (a seeded `expires_on` in the past, or a date
+  override, not a fabricated result). The ledger fires, Dormammu places a retention call on its
+  own, and the agent opens with context from act one: "last year you quoted $89 a month."
+
+That opening line is the entire Keewano and prior-context claim, demonstrated in one sentence
+instead of described. Shoot act two even if it is the only scripted beat you get.
+
+**Do not fake the eleven months.** Seed the date and say you seeded it. §8.4 applies.
+
+### 12.4 Context MCP calendar (un-cuts the scheduling track)
+
+The epic cut the Google Calendar track for lack of an owner. §4.10's Context MCP tool gives the
+mid-call calendar check **without Google OAuth**, backed by `profiles.prefs`, so the track comes
+back cheaply. Keep §4.10's bearer guard `[review 4A]` and its 14:50 hard abort.
+
+Fallback if the abort fires: put the availability list inline in the `schedule` instruction and
+render a "checking calendar…" row when that call reaches `talking`. Indistinguishable on camera.
+
+### 12.5 One repo-hygiene note
+
+`README.md` still says "Barebones template only. No implementation yet," and the top-level
+`router/`, `aggregator/`, `dashboard/`, `test-lines/` directories still contain only placeholder
+READMEs. The repo is being shared with judges. Updating the README is a five-minute job worth
+doing before the submission, and it is the first file anyone opens.
+
+---
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
@@ -1050,8 +1221,10 @@ them are load-bearing.
   dangerous defect in the plan. Its two strongest recommendations were partially declined by the
   user: webhooks were cut (15A, accepted) but Vercel was retained (16B) and the Context MCP
   server was kept at full scope (19B).
-- **VERDICT:** ENG CLEARED, ready to implement. Scope expanded mid-review at user direction
-  (Supabase, auth, durable event log, persistence beyond the demo); plan rewritten around it.
+- **VERDICT:** ENG CLEARED, ready to implement. Scope expanded twice mid-review at user
+  direction: first to a full product (Supabase, auth, durable event log), then reconciled against
+  the working Python code discovered on `origin/main`. §0 carries that reconciliation and §12 the
+  added scope; §1-§11 keep the architecture, the review findings and the API ground truth.
 
 **UNRESOLVED DECISIONS:**
 - Keewano custom-event registration (`customEventsHash` / `POST /json/custom` / codegen CLI) is
@@ -1063,3 +1236,9 @@ them are load-bearing.
   already 26 minutes over. The four-lane split (§5) is what closes that gap, so parallel
   execution is load-bearing rather than optional, and Lane A slipping has no fallback but to cut
   the other three lanes.
+- §1-§11 were drafted against a greenfield TypeScript repo before the working Python on
+  `origin/main` was visible. They were reconciled by §0 as deltas rather than rewritten, at the
+  user's explicit direction to save clock. **Fable must read §0 first or it will rebuild the
+  fan-out that already works in `call/dispatch.py`.**
+- The Supabase-behind-`write_result` swap (§0, decision 2) has not been tried against
+  `wait_for_result`'s poll loop. The seam is clean on paper; nobody has run it.
