@@ -147,8 +147,16 @@ despite the "gaming analytics" label. Docs: docs.keewano.com.
 
 ### 6.1 What it does for Dormammu
 
-- Every call is logged as one ordered event sequence (**one Keewano entity = one
-  call attempt**).
+Two paths, tracked in [#9](https://github.com/vedsmehta/dormammu/issues/9) and the
+MVP epic (`docs/epic-mvp-oct11.md`):
+
+- **Write path:** every call is logged as one ordered event sequence (**one Keewano
+  entity = one call attempt**), each turn, tool call and outcome as an event.
+- **Read path (contextual retrieval):** before a call is dispatched,
+  `keewano_context(to)` pulls prior sequences for the same number and returns a
+  short plain-text note (known IVR path, what was conceded last time) that is
+  appended to that call's instructions. The agent gets more context-aware across
+  calls with no human in the loop for this part.
 - **Keewano MCP for Agents** is queried for patterns: which sequences precede a
   failed negotiation vs. a successful one, which IVR paths dead-end, which scripts
   get hung up on, which vendors grant the student rate when asked.
@@ -156,9 +164,10 @@ despite the "gaming analytics" label. Docs: docs.keewano.com.
   analysis step; we close the loop by editing prompts.
 - The same sequences, aggregated across users, make the ledger (§2.1) smarter:
   what a vendor's retention line actually concedes, what comparable students pay.
-- Honest scope note: Keewano analyzes and surfaces patterns, it does not
-  auto-rewrite prompts. The improvement loop is Keewano-informed, not fully
-  autonomous. Say this plainly in the pitch.
+- Honest scope note, both halves stated plainly in the pitch: per-call contextual
+  retrieval into the agent's working instructions **is** automatic; script
+  authoring (`router/vendor_categories.json` templates) is **not** auto-rewritten.
+  That loop stays Keewano-informed and human-edited.
 
 ### 6.2 Data model
 
@@ -181,7 +190,7 @@ despite the "gaming analytics" label. Docs: docs.keewano.com.
 | 2505 | AttemptNumber | uint (SMS fallback kicks in after N) | dispatch |
 | 2506 | ScriptVersion | string, e.g. `quote-v2` | dispatch |
 | 2507 | EligibilityProfile | string: `student`, ... | dispatch |
-| 2508 | IvrOptionPressed | string (digit) | agent: `send_dtmf_events` tool calls |
+| 2508 | IvrOptionPressed | string (digit) | agent DTMF tool calls (pending Dial DTMF support, epic Risk #1); transcript extraction otherwise |
 | 2509 | HoldReached | none | transcript extraction |
 | 2510 | HumanReached | none | transcript extraction |
 | 2511 | VoicemailReached | none | transcript extraction |
@@ -196,6 +205,12 @@ despite the "gaming analytics" label. Docs: docs.keewano.com.
 | 2520 | CallFailed | string (error/reason) | `CallResult.error` |
 | 2521 | CallDurationSec | uint | `CallResult.duration_seconds` |
 | 2522 | CallOutcome | string: `success` / `failed` / `partial` | `CallResult.success` |
+| 2523 | AgentTurn | string (turn text, truncated) | `CallResult.transcript` |
+| 2524 | CalleeTurn | string (turn text, truncated) | `CallResult.transcript` |
+
+Turn events are interleaved in transcript order between `CallStarted` and the
+outcome events, so a sequence reads like the call itself. Max string length per
+event is unconfirmed; truncate (e.g. 500 chars) until Keewano confirms.
 
 ### 6.3 Where events are emitted
 
@@ -210,15 +225,34 @@ despite the "gaming analytics" label. Docs: docs.keewano.com.
 - **Transcript extraction:** one LLM pass over `CallResult.transcript` returns the
   "transcript extraction" events above. The aggregator already has to parse each
   call's result, so do it there.
-- **Required code changes:**
-  - `CallRequest` gains `track`, `vendor`, `channel`, `attempt`,
-    `script_version`, `eligibility_profile` and `request_id`.
-  - `Caller` records each DTMF key it sends.
-  - `CallResult` gains `keewano_id`.
+- **Proposed schema additions (not yet agreed).** `CallRequest`/`CallResult` are
+  frozen for today per the epic; these go to the group as a proposal, not a
+  silent change:
+  - `CallRequest`: `track`, `vendor`, `channel`, `attempt`, `script_version`,
+    `eligibility_profile`, `request_id`. These are what make "success rate by
+    script version" queryable.
+  - `CallResult`: `keewano_id`.
+  - If rejected, the fallback is to derive what we can (vendor from `to`,
+    track from `task`) and log `ScriptVersion` from a module-level constant per
+    track.
+- **DTMF capture** depends on the Dial voice migration (epic Risk #1). Until
+  Dial's DTMF support is confirmed, `IvrOptionPressed` comes from transcript
+  extraction.
 - **Never block or fail a call on analytics:** if `KEEWANO_API_KEY` is unset or
   the POST fails, log a warning and continue.
 - Voice-stack independent: the module consumes `CallRequest`/`CallResult` only,
-  so it is unaffected by LiveKit vs. Dial's own voice agent.
+  so it is unaffected by the LiveKit → Dial migration.
+
+**Read path:** `keewano_context(to: str) -> str`, called by the router/dispatch
+before building a call's instructions.
+- Queries prior sequences for the same `to` with the **personal access token**
+  (reads use the PAT, not the project key). The Python service can't call MCP
+  directly; use Keewano's SQL (PostgreSQL wire protocol) or Lua interfaces.
+  Confirm which with Keewano reps.
+- Returns a few lines of plain text, or `""` on any failure. It never raises and
+  never blocks a call, with a short timeout.
+- Data is queryable ~5 min after ingest, so context only reaches calls placed
+  after that window. Account for this in the demo timeline.
 
 ### 6.4 Improvement loop (and the demo beat)
 
@@ -247,8 +281,13 @@ real calls exist.
    `claude mcp add --scope user --transport http keewano https://api.keewano.com/mcp --header "k-token: $KEEWANO_PAT"`
 6. Onsite support: Vitaly Bukhovsky (co-founder/CPO), Karen Teboulle (VP Growth).
 
-**Done when:** a dispatched batch of calls appears in Keewano as one sequence per
-call, and an MCP query returns success rate by `ScriptVersion`.
+**Done when** (matches #9's acceptance criteria):
+1. One demo call produces a visible event sequence in KeewanoDB.
+2. A second call to the same number gets non-empty context from `keewano_context`.
+3. A bad token or network failure is caught locally and the call still completes.
+4. The pitch states both halves (automatic retrieval, human-edited scripts).
+5. Stretch: an MCP query returns success rate by `ScriptVersion` (needs the
+   schema proposal above).
 
 ## 7. Competitive landscape
 
