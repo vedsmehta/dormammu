@@ -9,4 +9,4 @@ Entry points (docs/RESEARCH.md):
 from research.engine import research
 from research.regulations import check
 
-__all__ = ["research", "check"]
+__all__ = ["check", "research"]

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 
 import { ErrorNote } from "@/components/ui";
 import { research } from "@/lib/api";
@@ -43,13 +43,30 @@ export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
     }
   };
 
+  // The box grows with the text instead of scrolling inside one line. Enter submits; Shift+Enter is a newline.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  };
+
   return (
     <>
       <form onSubmit={submit} className="askbox rise" style={{ "--d": ".2s" } as CSSProperties}>
-        <input
-          type="text"
+        <textarea
+          ref={inputRef}
+          rows={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={PLACEHOLDER}
           aria-label={PLACEHOLDER}
           autoFocus={autoFocus}

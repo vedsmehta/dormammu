@@ -57,6 +57,27 @@ class CategoryFindings(BaseModel):
     notes: str | None
 
 
+class PhoneLookup(BaseModel):
+    """Second pass: one named vendor's phone number, copied from a page the model opened."""
+
+    name: str
+    phone_as_written: str | None
+    phone_source_url: str | None
+    website: str | None
+    address: str | None
+    confidence: float
+    source_urls: list[str]
+
+
+class InfoLookup(BaseModel):
+    """Second pass: one named vendor's plans and discounts, each pointing at the page that states it."""
+
+    name: str
+    plans: list[SourcedPlan]
+    discounts: list[SourcedDiscount]
+    source_urls: list[str]
+
+
 class RegulationFinding(BaseModel):
     key: str
     rule: str
@@ -135,6 +156,8 @@ class Item(Loose):
     citations: list[Citation] = Field(default_factory=list)
     recommended: bool = False
     phone_verified: bool = False
+    phone_source: Literal["roster", "model_and_page", "page", "own_site"] | None = None
+    phone_note: str | None = None
     skip_reason: str | None = None
 
 
@@ -153,8 +176,19 @@ class Regulation(Loose):
     applies: bool
     what_we_do: str
     citation: Citation | None = None
+    claimed_citation: Citation | None = None  # named by the model or our baseline, not verified
     key: str | None = None
     note: str | None = None
+
+
+class SecondPass(Loose):
+    """What the second pass did: targeted searches, vendor-site fetches, and how many phones it proved."""
+
+    phone_searches: int = 0
+    site_fetches: int = 0
+    info_searches: int = 0
+    phones_found: int = 0
+    seconds: float = 0.0
 
 
 class Proposal(Loose):
@@ -170,3 +204,4 @@ class Proposal(Loose):
     search_count: int
     errors: list[str] = Field(default_factory=list)
     seconds: float | None = None
+    second_pass: SecondPass = Field(default_factory=SecondPass)

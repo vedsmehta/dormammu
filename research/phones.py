@@ -31,15 +31,36 @@ US_PHONE = re.compile(
 )
 TEL_HREF = re.compile(r"tel:\s*\+?\s*1?[\s\-.()]*(\d{3})[\s\-.()]*(\d{3})[\s\-.()]*(\d{4})", re.IGNORECASE)
 _TAGS = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+_OPEN_TAG = re.compile(r"<(script|style|noscript)[^>]*>.*$", re.IGNORECASE | re.DOTALL)  # cut off by MAX_FETCH_BYTES
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
 
 
+# Keypad letters for vanity numbers ("1-800-XFINITY" is 1-800-934-6489).
+_KEYPAD = {c: d for d, letters in {
+    "2": "ABC", "3": "DEF", "4": "GHI", "5": "JKL", "6": "MNO", "7": "PQRS", "8": "TUV", "9": "WXYZ",
+}.items() for c in letters}  # fmt: skip
+VANITY = re.compile(
+    r"(?<![\dA-Za-z])(?:\+?\s?1" + _SEP + r")?\(?([2-9]\d{2})\)?" + _SEP + r"([A-Za-z0-9]{3})[\s.\-]?([A-Za-z0-9]{4})(?![A-Za-z0-9])"
+)
+
+
+def _keypad(text: str) -> str:
+    return "".join(_KEYPAD.get(c.upper(), c) for c in text)
+
+
 def normalize(raw: str | None) -> str | None:
-    """E.164 for a US number written any common way, else None. Never raises."""
+    """E.164 for a US number written any common way, including keypad letters, else None. Never raises."""
     if not raw:
         return None
-    digits = re.sub(r"\D", "", str(raw))
+    text = str(raw)
+    digits = re.sub(r"\D", "", text)
+    if len(digits) not in (10, 11) and re.search(r"[A-Za-z]", text):
+        m = VANITY.search(text)
+        if m and re.search(r"[A-Za-z]", m.group(2) + m.group(3)):
+            digits = re.sub(r"\D", "", _keypad("".join(m.groups())))
+            if len(digits) == 10:
+                digits = ("1" + digits) if re.search(r"(?:^|\D)1" + _SEP + r"\(?" + m.group(1), m.group(0)) else digits
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
     if len(digits) != 10 or digits[0] in "01" or digits[3] in "01":
@@ -47,8 +68,11 @@ def normalize(raw: str | None) -> str | None:
     return "+1" + digits
 
 
-def find_phones(text: str | None) -> list[str]:
-    """Every distinct US phone number in `text`, as E.164, in order of first appearance."""
+def find_phones(text: str | None, *, vanity: bool = True) -> list[str]:
+    """Every distinct US phone number in `text`, as E.164, in order of first appearance.
+
+    tel: links first, then written numbers, then keypad-letter vanity numbers when `vanity` is set.
+    """
     out: list[str] = []
     if not text:
         return out
@@ -57,6 +81,23 @@ def find_phones(text: str | None) -> list[str]:
             e164 = normalize("".join(m.groups()))
             if e164 and e164 not in out:
                 out.append(e164)
+    if vanity:
+        for m in VANITY.finditer(text):
+            if not re.search(r"[A-Za-z]", m.group(2) + m.group(3)):
+                continue
+            e164 = normalize(m.group(0))
+            if e164 and e164 not in out:
+                out.append(e164)
+    return out
+
+
+def tel_links(text: str | None) -> list[str]:
+    """Only the numbers a page exposes as tel: links, as E.164. The strongest signal of 'our number'."""
+    out: list[str] = []
+    for m in TEL_HREF.finditer(text or ""):
+        e164 = normalize("".join(m.groups()))
+        if e164 and e164 not in out:
+            out.append(e164)
     return out
 
 
@@ -83,6 +124,7 @@ def visible_text(raw: str | None) -> str:
     if not raw:
         return ""
     text = _TAGS.sub(" ", raw)
+    text = _OPEN_TAG.sub(" ", text)
     text = _TAG.sub(" ", text)
     return _WS.sub(" ", html.unescape(text)).strip()
 
@@ -108,9 +150,7 @@ def url_key(url: str | None) -> str | None:
     if not cleaned:
         return None
     parts = urlsplit(cleaned)
-    host = parts.netloc.lower()
-    if host.startswith("www."):
-        host = host[4:]
+    host = parts.netloc.lower().removeprefix("www.")
     path = parts.path.rstrip("/") or "/"
     return urlunsplit((parts.scheme.lower(), host, path, parts.query, ""))
 
@@ -119,8 +159,7 @@ def host_of(url: str | None) -> str | None:
     cleaned = clean_url(url)
     if not cleaned:
         return None
-    host = urlsplit(cleaned).netloc.lower()
-    return host[4:] if host.startswith("www.") else host
+    return urlsplit(cleaned).netloc.lower().removeprefix("www.")
 
 
 async def fetch_text(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> str | None:
@@ -140,7 +179,8 @@ async def fetch_text(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> str | 
             return None
         content_type = (response.headers.get("content-type") or "").lower()
         if content_type and not content_type.startswith(TEXT_TYPES):
-            return None
+            # A PDF or image that exists is still a real page to cite; it just carries no text to search.
+            return f"[binary {content_type.split(';')[0]}]"
         return response.text[:MAX_FETCH_BYTES]
     except Exception:  # noqa: BLE001
         return None
@@ -188,3 +228,24 @@ async def verify_phone(e164: str | None, urls: list[str], cache: PageCache, max_
         if text and digits_present(target, text):
             return url
     return None
+
+
+def single_page_phone(text: str | None) -> str | None:
+    """The one number a fetched page clearly presents as its own, else None.
+
+    Taken only when the page exposes exactly one distinct tel: link, or no tel: links and exactly one
+    distinct written number in its visible text. Several numbers (locations, fax, partners) mean we cannot
+    tell, so None. Written numbers are read from the visible text only: raw markup is full of ten-digit runs
+    that are not phone numbers (a UUID segment in a font URL inside a style block, for one), and this number
+    is taken on the page's authority alone. Vanity spellings are ignored here; they only confirm a number
+    the model reported.
+    """
+    if not text:
+        return None
+    links = tel_links(text)
+    if len(links) == 1:
+        return links[0]
+    if links:
+        return None
+    written = find_phones(visible_text(text), vanity=False)
+    return written[0] if len(written) == 1 else None

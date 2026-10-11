@@ -21,9 +21,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from research import phones  # noqa: E402
-from research.engine import research  # noqa: E402
-from settings import load_env, results_dir  # noqa: E402
+from research import phones
+from research.engine import research
+from settings import load_env, results_dir
 
 DEFAULT_REQUEST = (
     "I'm moving to Palo Alto on October 25 for the school year, 1-bedroom, handle the move, internet and a dentist"
@@ -107,6 +107,8 @@ def print_proposal(proposal: dict) -> None:
         s = it["strategy"]
         print(f"  {'':<14}   strategy: {s['variant']} ({s.get('label')}); asks: {', '.join(s['asks'])}")
         print(f"  {'':<14}   opening: {s['opening']}")
+        if it.get("phone_note"):
+            print(f"  {'':<14}   phone: {it.get('phone_source') or 'none'}; {it['phone_note']}")
         if it.get("skip_reason"):
             print(f"  {'':<14}   skip: {it['skip_reason']}")
 
@@ -123,12 +125,24 @@ def print_proposal(proposal: dict) -> None:
         for e in proposal["errors"]:
             print(f"  - {e}")
 
+    sp = proposal.get("second_pass") or {}
+    print(
+        f"\nSecond pass: {sp.get('phone_searches', 0)} phone searches, {sp.get('site_fetches', 0)} vendor-site "
+        f"fetches, {sp.get('info_searches', 0)} price searches, {sp.get('phones_found', 0)} phones found, "
+        f"{sp.get('seconds', 0)}s"
+    )
+
     items = proposal["items"]
     verified = sum(1 for it in items if it["phone_verified"])
     web = sum(1 for it in items if it["source"] == "web")
+    by_source: dict[str, int] = {}
+    for it in items:
+        if it["phone_verified"]:
+            by_source[it.get("phone_source") or "unknown"] = by_source.get(it.get("phone_source") or "unknown", 0) + 1
+    sources = ", ".join(f"{n} {k}" for k, n in sorted(by_source.items())) or "none"
     print(
-        f"\nHeadline: {len(items)} items ({web} from the web), {verified} phones verified, "
-        f"{len(proposal['categories'])} categories, {len(proposal['regulations'])} regulations, "
+        f"\nHeadline: {len(items)} items ({web} from the web), {verified} of {len(items)} ended with a verified "
+        f"phone ({sources}), {len(proposal['categories'])} categories, {len(proposal['regulations'])} regulations, "
         f"{proposal.get('seconds')}s"
     )
 

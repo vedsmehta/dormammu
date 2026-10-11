@@ -65,7 +65,16 @@ export function parseTs(ts: string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-const SLOT_FMT = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+// Every clock on every screen is shown in the product's one timezone, not the viewer's browser zone,
+// so a slot, a call time and a transcript line never disagree between devices.
+export const TZ = "America/Los_Angeles";
+
+const SLOT_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: TZ,
+  weekday: "short",
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 /** '2026-10-15T14:30:00-07:00' -> 'Thu 2:30pm'. Unparseable input is returned as is. */
 export function fmtSlot(iso: string | null | undefined): string {
@@ -76,6 +85,7 @@ export function fmtSlot(iso: string | null | undefined): string {
 }
 
 const STAMP_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: TZ,
   month: "short",
   day: "numeric",
   hour: "numeric",
@@ -211,6 +221,7 @@ export function describeError(e: unknown): string {
 }
 
 const STAMP_FULL_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: TZ,
   month: "short",
   day: "numeric",
   year: "numeric",
@@ -225,12 +236,14 @@ export function fmtStampFull(iso: string | null | undefined): string {
   return STAMP_FULL_FMT.format(new Date(ms));
 }
 
-const DAY_SHORT_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+const DAY_SHORT_FMT = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "short", day: "numeric" });
+const DAY_FULL_TZ_FMT = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "short", day: "numeric", year: "numeric" });
+const YEAR_FMT = new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric" });
 
 /** Timestamp -> 'Oct 15', with the year added once it differs from the current one. */
 export function fmtDayFromTs(iso: string | null | undefined, now: Date = new Date()): string {
   const ms = parseTs(iso);
   if (ms === null) return EM;
   const d = new Date(ms);
-  return d.getFullYear() === now.getFullYear() ? DAY_SHORT_FMT.format(d) : DAY_FMT.format(d);
+  return YEAR_FMT.format(d) === YEAR_FMT.format(now) ? DAY_SHORT_FMT.format(d) : DAY_FULL_TZ_FMT.format(d);
 }
