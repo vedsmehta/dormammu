@@ -10,11 +10,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hmac
+import importlib
+import inspect
 import json
 import os
 import platform
 import re
 import subprocess
+import time
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -32,7 +35,16 @@ from server import accuracy as accuracy_mod
 from server import store as store_mod
 from server.accuracy import accuracy_report, keewano_token_kind, mask_phone
 from server.auth import bearer_token, current_user_id, ensure_profile
-from server.schemas import JsonRpcRequest, LedgerFire, ProfileUpdate, RunCreate, SignupIn, VendorsIn
+from server.schemas import (
+    JsonRpcRequest,
+    LedgerFire,
+    ProfileUpdate,
+    ProposalApprove,
+    ResearchIn,
+    RunCreate,
+    SignupIn,
+    VendorsIn,
+)
 from server.store import TERMINAL_STATES, Store
 from settings import ROOT, load_env
 
@@ -234,7 +246,8 @@ def get_vendors(user_id: UserId, store: StoreDep) -> list[dict]:
 @app.post(f"{PREFIX}/vendors")
 def post_vendors(body: VendorsIn, user_id: UserId, store: StoreDep) -> list[dict]:
     ensure_profile(store, user_id)
-    return store.upsert_vendors(user_id, [v.model_dump() for v in body.vendors])
+    # exclude_none: an omitted source or website leaves the stored value alone (store default: manual).
+    return store.upsert_vendors(user_id, [v.model_dump(exclude_none=True) for v in body.vendors])
 
 
 # ---------------------------------------------------------------------------------------------
@@ -771,6 +784,23 @@ def _money(amount: Any) -> str:
     return f"${value:,.0f}" if value == int(value) else f"${value:,.2f}"
 
 
+@app.get(f"{PREFIX}/insights")
+def get_insights(user_id: UserId, store: StoreDep) -> dict:
+    """The analysis report over this user's history (analysis.insights.compute_insights).
+
+    Vendor scorecards, track stats, failure modes, the prior-context effect and ranked recommendations,
+    with a coverage block that says how much of the data is seeded or simulated.
+    """
+    try:
+        from analysis.insights import compute_insights
+    except ImportError as exc:  # pragma: no cover - the analysis package ships with the repo
+        raise HTTPException(status_code=501, detail=f"analysis layer unavailable: {exc}") from exc
+    try:
+        return compute_insights(store, user_id, cache_ttl=60)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"insights failed: {exc}") from exc
+
+
 @app.post(f"{PREFIX}/ledger/fire")
 async def fire_ledger(body: LedgerFire, user_id: UserId, store: StoreDep) -> dict:
     ensure_profile(store, user_id)
@@ -826,6 +856,406 @@ async def fire_ledger(body: LedgerFire, user_id: UserId, store: StoreDep) -> dic
     )
     await _dispatch(store, user_id, run, calls)
     return _assemble(store, run["id"], user_id, utcnow())
+
+
+# ---------------------------------------------------------------------------------------------
+# Research-first flow: POST /research -> proposal -> POST /proposals/{id}/approve -> run
+#
+# The engine (research.engine.research, another lane's module) finds providers, plans, discounts and phones
+# and checks regulations; nothing is dialed until the user approves items. Only vendor rows are dialable, so
+# approval first turns each item into a vendors row (reusing a roster row when the phone matches) and then
+# builds a run the way POST /runs does. Research vendors are external numbers: they are dialed only when
+# ALLOW_EXTERNAL_CALLS is set, otherwise their rows run as labeled simulated rows carrying NOT_DIALED_NOTE.
+# ---------------------------------------------------------------------------------------------
+
+EXTERNAL_CALLS_ENV = "ALLOW_EXTERNAL_CALLS"
+NOT_DIALED_NOTE = "approved, not dialed: external calling disabled"
+OBJECTIVE_MAX_CHARS = 600
+VENDOR_KEY_MAX_CHARS = 40
+APPROVABLE_STATUSES = ("proposed",)
+TRACKS = ("quote", "schedule", "negotiate")
+# Track by research category, used only when an item carries no valid track of its own.
+CATEGORY_TRACKS = {
+    "movers": "quote",
+    "moving": "quote",
+    "mover": "quote",
+    "storage": "quote",
+    "internet": "negotiate",
+    "isp": "negotiate",
+    "broadband": "negotiate",
+    "utilities": "negotiate",
+    "utility": "negotiate",
+    "phone": "negotiate",
+    "insurance": "negotiate",
+    "dentist": "schedule",
+    "dental": "schedule",
+    "doctor": "schedule",
+    "clinic": "schedule",
+    "health": "schedule",
+}
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def external_calls_enabled() -> bool:
+    """ALLOW_EXTERNAL_CALLS is truthy (1, true, yes). Read at call time so a restart is never needed."""
+    return os.environ.get(EXTERNAL_CALLS_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _str(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in ("none", "null", "undefined") else text
+
+
+def _as_dict(value: Any) -> dict:
+    if isinstance(value, dict):
+        return value
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        with contextlib.suppress(Exception):
+            out = dump()
+            if isinstance(out, dict):
+                return out
+    return {}
+
+
+def _as_list(value: Any) -> list:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (tuple, set)):
+        return list(value)
+    if isinstance(value, str) and value.strip():
+        return [value]
+    return []
+
+
+def normalize_proposal(raw: Any, request_text: str) -> dict:
+    """The stored proposal body. Always a dict with `items` (each with an `id`), `errors`, `regulations`,
+    `meta` and `request`; everything else the engine returned is kept as is."""
+    body = dict(_as_dict(raw))
+    items: list[dict] = []
+    for index, item in enumerate(_as_list(body.get("items"))):
+        item = dict(_as_dict(item))
+        if not item:
+            continue
+        item["id"] = _str(item.get("id") or item.get("item_id")) or f"item-{index + 1}"
+        items.append(item)
+    body["items"] = items
+    body["errors"] = [str(e)[:300] for e in _as_list(body.get("errors")) if e]
+    body["regulations"] = _as_list(body.get("regulations"))
+    body["meta"] = dict(_as_dict(body.get("meta")))
+    body.setdefault("request", request_text)
+    return body
+
+
+def item_vendor(item: dict) -> dict:
+    """{name, phone, website} from the item's `vendor` block, falling back to flat keys. phone is None when
+    the engine kept none (it only keeps a phone that appeared in a fetched source or on the roster)."""
+    vendor = _as_dict(item.get("vendor"))
+    return {
+        "name": _str(vendor.get("name") or item.get("vendor_name") or item.get("name")),
+        "phone": _str(vendor.get("phone") or item.get("phone")) or None,
+        "website": _str(vendor.get("website") or item.get("website") or item.get("url")) or None,
+    }
+
+
+def item_track(item: dict, vendor_row: dict | None = None) -> str:
+    track = _str(item.get("track")).lower()
+    if track in TRACKS:
+        return track
+    if vendor_row and vendor_row.get("track") in TRACKS:
+        return vendor_row["track"]
+    return CATEGORY_TRACKS.get(_str(item.get("category")).lower(), "quote")
+
+
+def research_vendor_key(category: Any, name: Any) -> str:
+    """'r_' + slug of the category and vendor name, capped at VENDOR_KEY_MAX_CHARS."""
+    text = " ".join(p for p in (_str(category), _str(name)) if p).lower()
+    slug = _SLUG_RE.sub("-", text).strip("-") or "vendor"
+    return ("r_" + slug)[:VENDOR_KEY_MAX_CHARS].rstrip("-")
+
+
+def _phone_digits(value: Any) -> str:
+    return re.sub(r"\D", "", _str(value))
+
+
+def same_phone(a: Any, b: Any) -> bool:
+    """Digits-only comparison; a 10-digit national number matches its +1 form."""
+    da, db = _phone_digits(a), _phone_digits(b)
+    if not da or not db:
+        return False
+    return da == db or (len(da) >= 10 and len(db) >= 10 and da[-10:] == db[-10:])
+
+
+def item_objective(item: dict, fallback: str) -> str:
+    """strategy.opening + why + "Ask for: ..." kept under OBJECTIVE_MAX_CHARS; `why` is trimmed first."""
+    strategy = _as_dict(item.get("strategy"))
+    opening = _str(strategy.get("opening"))
+    why = _str(item.get("why"))
+    asks = [_str(a) for a in _as_list(strategy.get("asks")) if _str(a)]
+    ask_line = "Ask for: " + ", ".join(asks) + "." if asks else ""
+
+    def compose(why_text: str) -> str:
+        return " ".join(p for p in (opening, why_text, ask_line) if p).strip()
+
+    text = compose(why)
+    if len(text) >= OBJECTIVE_MAX_CHARS and why:
+        room = OBJECTIVE_MAX_CHARS - 1 - len(compose("")) - 1
+        why = why[: room - 3].rstrip() + "..." if room > 20 else ""
+        text = compose(why)
+    if len(text) >= OBJECTIVE_MAX_CHARS:
+        text = text[: OBJECTIVE_MAX_CHARS - 4].rstrip() + "..."
+    return text or _str(fallback)[: OBJECTIVE_MAX_CHARS - 1] or "Call about the client's request."
+
+
+def research_counts(body: dict, seconds: float) -> dict:
+    items = body.get("items") or []
+    categories = {_str(it.get("category")).lower() for it in items if _str(it.get("category"))}
+    meta = body.get("meta") or {}
+    return {
+        "items": len(items),
+        "phones_verified": sum(1 for it in items if item_vendor(it)["phone"]),
+        "categories": len(categories),
+        "regulations": len(body.get("regulations") or []),
+        "web_search": meta.get("web_search", False),
+        "seconds": round(seconds, 2),
+        "errors": len(body.get("errors") or []),
+    }
+
+
+@app.post(f"{PREFIX}/research")
+async def post_research(body: ResearchIn, user_id: UserId, store: StoreDep) -> dict:
+    """Research first. The engine reads the profile, the request and the roster and returns a proposal;
+    it is stored (status proposed, or failed when it has no items and reports errors) and returned. Nothing
+    is dialed here. 503 when the engine module cannot be imported."""
+    request_text = body.request.strip()
+    if not request_text:
+        raise HTTPException(status_code=400, detail="request is empty")
+    profile = ensure_profile(store, user_id)
+    roster = store.list_vendors(user_id)
+    try:
+        engine = importlib.import_module("research.engine")
+        research_fn = engine.research
+    except Exception as exc:  # absent, mid-write or broken module: say so and stay up
+        raise HTTPException(
+            status_code=503,
+            detail=f"research engine unavailable: {exc.__class__.__name__}: {exc}"[:300],
+        ) from exc
+    started = time.monotonic()
+    try:
+        result = research_fn(profile, request_text, roster)
+        if inspect.isawaitable(result):
+            result = await result
+    except Exception as exc:  # noqa: BLE001
+        result = {"items": [], "errors": [f"{exc.__class__.__name__}: {exc}"[:300]]}
+    seconds = time.monotonic() - started
+    proposal = normalize_proposal(result, request_text)
+    status = "failed" if not proposal["items"] and proposal["errors"] else "proposed"
+    row = store.create_proposal(user_id, request_text, proposal, status=status)
+    counts = research_counts(proposal, seconds)
+    log_event(
+        store,
+        user_id,
+        "research_completed",
+        {"proposal_id": row["id"], "status": status, "request": request_text, **counts},
+    )
+    return row
+
+
+@app.get(f"{PREFIX}/proposals")
+def get_proposals(user_id: UserId, store: StoreDep, limit: int = 20) -> list[dict]:
+    """Newest first, without the body: id, request, status, n_items, approved_item_ids, run_id, timestamps."""
+    return store.list_proposals(user_id, max(1, min(limit, 100)))
+
+
+def _proposal_or_404(store: Store, proposal_id: str, user_id: str) -> dict:
+    row = store.get_proposal(proposal_id, user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    return row
+
+
+@app.get(f"{PREFIX}/proposals/{{proposal_id}}")
+def get_proposal(proposal_id: str, user_id: UserId, store: StoreDep) -> dict:
+    return _proposal_or_404(store, proposal_id, user_id)
+
+
+def _vendor_for_item(store: Store, user_id: str, item: dict, vendor_info: dict, roster: list[dict]) -> dict:
+    """The vendors row an approved item dials: the roster row with the same phone, else an upserted
+    research row (key r_<category>-<name>, is_demo false, source research, website kept)."""
+    for vendor in roster:
+        if same_phone(vendor.get("phone"), vendor_info["phone"]):
+            return vendor
+    key = research_vendor_key(item.get("category"), vendor_info["name"])
+    fields: dict[str, Any] = {
+        "key": key,
+        "name": vendor_info["name"] or key,
+        "track": item_track(item),
+        "phone": vendor_info["phone"],
+        "is_demo": False,
+        "source": "research",
+    }
+    if vendor_info["website"]:
+        fields["website"] = vendor_info["website"]
+    (row,) = store.upsert_vendors(user_id, [fields])
+    roster.append(row)
+    return row
+
+
+@app.post(f"{PREFIX}/proposals/{{proposal_id}}/approve")
+async def approve_proposal(
+    proposal_id: str, body: ProposalApprove, user_id: UserId, store: StoreDep
+) -> dict:
+    """Turn the approved items into a run. Items without a phone are skipped ("no verified phone"); the
+    rest become vendors rows and one calls row each. Roster (is_demo) vendors go through dispatch_run; research
+    vendors are external numbers and are dialed only when ALLOW_EXTERNAL_CALLS is set, otherwise their rows are
+    pre-marked simulated with NOT_DIALED_NOTE and the tick's simulate path drives them."""
+    proposal = _proposal_or_404(store, proposal_id, user_id)
+    if proposal.get("status") not in APPROVABLE_STATUSES:
+        raise HTTPException(status_code=409, detail=f"proposal is {proposal.get('status')}, not proposed")
+    body_items = (proposal.get("proposal") or {}).get("items") if isinstance(proposal.get("proposal"), dict) else []
+    items = {it["id"]: it for it in _as_list(body_items) if isinstance(it, dict) and it.get("id")}
+    request_text = _str(proposal.get("request")) or "approved proposal"
+    ensure_profile(store, user_id)
+    roster = store.list_vendors(user_id)
+    enabled = external_calls_enabled()
+    cap = int(os.environ.get("MAX_CALLS_PER_RUN", "5") or 5)
+
+    skipped: list[dict] = []
+    accepted: list[tuple[str, dict, dict, str]] = []  # (item_id, item, vendor row, track)
+    seen_items: set[str] = set()
+    vendor_item: dict[str, str] = {}
+    for raw_id in body.item_ids:
+        item_id = raw_id.strip()
+        if not item_id or item_id in seen_items:
+            continue
+        seen_items.add(item_id)
+        item = items.get(item_id)
+        if item is None:
+            skipped.append({"item_id": item_id, "reason": "not in this proposal"})
+            continue
+        vendor_info = item_vendor(item)
+        if not vendor_info["phone"]:
+            skipped.append({"item_id": item_id, "reason": "no verified phone"})
+            continue
+        if len(accepted) >= cap:
+            skipped.append({"item_id": item_id, "reason": f"over the MAX_CALLS_PER_RUN cap of {cap}"})
+            continue
+        vendor = _vendor_for_item(store, user_id, item, vendor_info, roster)
+        if vendor["id"] in vendor_item:
+            skipped.append({"item_id": item_id, "reason": f"same vendor as {vendor_item[vendor['id']]}"})
+            continue
+        vendor_item[vendor["id"]] = item_id
+        accepted.append((item_id, item, vendor, item_track(item, vendor)))
+    if not accepted:
+        reasons = "; ".join(f"{s['item_id']}: {s['reason']}" for s in skipped) or "no item ids given"
+        raise HTTPException(status_code=400, detail=f"nothing to dispatch ({reasons})")
+
+    run = store.create_run(user_id, request_text)
+    rows = []
+    for item_id, item, vendor, track in accepted:
+        rows.append(
+            {
+                "run_id": run["id"],
+                "vendor_id": vendor["id"],
+                "vendor_key": vendor["key"],
+                "track": track,
+                "target_name": vendor["name"],
+                "target_phone": vendor["phone"],
+                "objective": item_objective(item, request_text),
+                "prior_context": _safe_prior_context(store, user_id, vendor["key"], track),
+                "state": "planned",
+                "state_rank": 0,
+                "simulated": False,
+            }
+        )
+    calls = store.insert_calls(rows)
+    genders = ("female", "male")
+    to_dial: list[dict] = []
+    held: list[dict] = []
+    for index, (row, (_item_id, _item, vendor, _track)) in enumerate(zip(calls, accepted)):
+        row["voice_gender"] = genders[index % 2]
+        row["is_demo"] = bool(vendor.get("is_demo"))
+        (to_dial if enabled or vendor.get("is_demo") else held).append(row)
+    log_event(
+        store,
+        user_id,
+        "run_requested",
+        {
+            "request": request_text,
+            "kind": "proposal",
+            "proposal_id": proposal_id,
+            "n_calls": len(calls),
+            "vendor_keys": [r["vendor_key"] for r in calls],
+            "item_ids": [a[0] for a in accepted],
+        },
+        run_id=run["id"],
+    )
+
+    now_iso = utcnow().isoformat()
+    for row in held:
+        store.update_call(row["id"], {"simulated": True, "error": NOT_DIALED_NOTE, "started_at": now_iso})
+        store.update_call_state(row["id"], "dialing", 1)
+        context = {"track": row["track"], "vendor_key": row["vendor_key"]}
+        log_event(
+            store,
+            user_id,
+            "call_simulated",
+            {"reason": NOT_DIALED_NOTE, "limit": False, "external": True, **context},
+            run_id=run["id"],
+            call_id=row["id"],
+        )
+        log_event(
+            store,
+            user_id,
+            "call_dispatched",
+            {"simulated": True, "dial_call_id": None, **context},
+            run_id=run["id"],
+            call_id=row["id"],
+        )
+    if to_dial:
+        await _dispatch(store, user_id, run, to_dial)
+    else:
+        store.set_run_status(run["id"], "running")
+
+    approved_ids = [a[0] for a in accepted]
+    log_event(
+        store,
+        user_id,
+        "proposal_approved",
+        {
+            "proposal_id": proposal_id,
+            "approved": len(accepted),
+            "skipped": skipped,
+            "dialed": len(to_dial),
+            "simulated": len(held),
+            "external_calls_enabled": enabled,
+            "item_ids": approved_ids,
+        },
+        run_id=run["id"],
+    )
+    updated = store.update_proposal(
+        proposal_id, {"status": "dispatched", "run_id": run["id"], "approved_item_ids": approved_ids}
+    )
+    return {
+        "run": _assemble(store, run["id"], user_id, utcnow()),
+        "skipped": skipped,
+        "external_calls_enabled": enabled,
+        "proposal": updated,
+    }
+
+
+@app.post(f"{PREFIX}/proposals/{{proposal_id}}/reject")
+def reject_proposal(proposal_id: str, user_id: UserId, store: StoreDep) -> dict:
+    proposal = _proposal_or_404(store, proposal_id, user_id)
+    if proposal.get("status") == "dispatched":
+        raise HTTPException(status_code=409, detail="proposal already dispatched")
+    row = store.update_proposal(proposal_id, {"status": "rejected"})
+    if row is None:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    log_event(store, user_id, "proposal_rejected", {"proposal_id": proposal_id, "request": row.get("request")})
+    return row
 
 
 # ---------------------------------------------------------------------------------------------

@@ -5,10 +5,23 @@ import { useEffect, useState } from "react";
 
 import { fromSlots, toSlots, type Slot } from "@/components/profile/availability";
 import { AvailabilityEditor } from "@/components/profile/AvailabilityEditor";
-import { Button, ErrorNote, Field, inputClass, Panel } from "@/components/ui";
+import { AuthShell, Progress } from "@/components/shell";
+import { ErrorNote, Field } from "@/components/ui";
 import { getProfile, getVendors, upsertProfile, upsertVendors } from "@/lib/api";
 import { describeError } from "@/lib/format";
-import { COHORTS, DEFAULT_CALLER_NAME, type Prefs, type Track, type Vendor } from "@/lib/types";
+import {
+  BEDROOMS,
+  COHORTS,
+  DEFAULT_CALLER_NAME,
+  PROVIDER_CATEGORIES,
+  type Address,
+  type Bedrooms,
+  type CurrentProvider,
+  type Prefs,
+  type ProviderCategory,
+  type Track,
+  type Vendor,
+} from "@/lib/types";
 
 // The demo roster. Phones stay blank here and are typed in through this form, never committed.
 const DEFAULT_VENDORS: Vendor[] = [
@@ -21,6 +34,44 @@ const DEFAULT_VENDORS: Vendor[] = [
 
 const TRACKS: Track[] = ["quote", "schedule", "negotiate"];
 
+type AddressDraft = { street: string; city: string; state: string; zip: string };
+type ProviderDraft = { category: ProviderCategory; name: string; monthly_usd: string; contract_end: string };
+
+const EMPTY_ADDRESS: AddressDraft = { street: "", city: "", state: "", zip: "" };
+
+function toAddressDraft(a: Address | null | undefined): AddressDraft {
+  return { street: a?.street ?? "", city: a?.city ?? "", state: a?.state ?? "", zip: a?.zip ?? "" };
+}
+
+function fromAddressDraft(a: AddressDraft): Address | null {
+  const out: Address = { street: a.street.trim() || null, city: a.city.trim() || null, state: a.state.trim() || null, zip: a.zip.trim() || null };
+  return Object.values(out).some(Boolean) ? out : null;
+}
+
+function toProviderDrafts(list: CurrentProvider[] | undefined): ProviderDraft[] {
+  if (!Array.isArray(list)) return [];
+  return list.map((p) => ({
+    category: PROVIDER_CATEGORIES.includes(p.category) ? p.category : "other",
+    name: p.name ?? "",
+    monthly_usd: p.monthly_usd === null || p.monthly_usd === undefined ? "" : String(p.monthly_usd),
+    contract_end: p.contract_end ?? "",
+  }));
+}
+
+function fromProviderDrafts(list: ProviderDraft[]): CurrentProvider[] {
+  return list
+    .filter((p) => p.name.trim())
+    .map((p) => {
+      const amount = p.monthly_usd.trim() === "" ? null : Number(p.monthly_usd);
+      return {
+        category: p.category,
+        name: p.name.trim(),
+        monthly_usd: amount !== null && Number.isFinite(amount) ? amount : null,
+        contract_end: p.contract_end || null,
+      };
+    });
+}
+
 function mergeRoster(fromApi: Vendor[]): Vendor[] {
   if (fromApi.length === 0) return DEFAULT_VENDORS.map((v) => ({ ...v }));
   const rows = fromApi.map((v) => ({ ...v, phone: v.phone ?? "", is_demo: Boolean(v.is_demo) }));
@@ -31,26 +82,27 @@ function mergeRoster(fromApi: Vendor[]): Vendor[] {
   return rows;
 }
 
-/** The three-step indicator from the prototype's auth sheets. */
-function Progress({ step }: { step: 0 | 1 | 2 }) {
-  const steps = ["Profile", "Roster", "Ready"];
+/** Street, city, state, zip as four underline fields. */
+function AddressFields({ legend, value, onChange }: { legend: string; value: AddressDraft; onChange: (a: AddressDraft) => void }) {
+  const set = (patch: Partial<AddressDraft>) => onChange({ ...value, ...patch });
   return (
-    <ol className="flex items-center gap-3 font-mono text-xs" aria-label="Setup progress">
-      {steps.map((label, i) => (
-        <li key={label} className="flex items-center gap-2">
-          {i > 0 ? <span className="h-px w-6 bg-line" aria-hidden="true" /> : null}
-          <span
-            className={`h-2.5 w-2.5 rounded-full ${
-              i < step ? "bg-fg" : i === step ? "bg-mint shadow-[0_0_0_4px_rgba(134,247,226,0.3)]" : "border border-dim"
-            }`}
-            aria-hidden="true"
-          />
-          <span className={i === step ? "font-semibold text-fg" : i < step ? "text-muted" : "text-dim"} aria-current={i === step ? "step" : undefined}>
-            {label}
-          </span>
-        </li>
-      ))}
-    </ol>
+    <fieldset className="field">
+      <legend>{legend}</legend>
+      <Field label="Street" tight>
+        <input type="text" value={value.street} onChange={(e) => set({ street: e.target.value })} autoComplete="street-address" />
+      </Field>
+      <div className="fields-2">
+        <Field label="City" tight>
+          <input type="text" value={value.city} onChange={(e) => set({ city: e.target.value })} autoComplete="address-level2" />
+        </Field>
+        <Field label="State" tight>
+          <input type="text" value={value.state} onChange={(e) => set({ state: e.target.value })} autoComplete="address-level1" />
+        </Field>
+      </div>
+      <Field label="ZIP" tight>
+        <input type="text" value={value.zip} onChange={(e) => set({ zip: e.target.value })} autoComplete="postal-code" inputMode="numeric" className="num" />
+      </Field>
+    </fieldset>
   );
 }
 
@@ -59,9 +111,18 @@ export function OnboardingForm() {
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [cohort, setCohort] = useState("student");
+  const [studentProof, setStudentProof] = useState("");
   const [callerName, setCallerName] = useState("");
   const [budget, setBudget] = useState<string>("");
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [currentAddress, setCurrentAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+  const [newAddress, setNewAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+  const [moveDate, setMoveDate] = useState("");
+  const [bedrooms, setBedrooms] = useState<Bedrooms | "">("");
+  const [householdSize, setHouseholdSize] = useState("");
+  const [providers, setProviders] = useState<ProviderDraft[]>([]);
+  const [dental, setDental] = useState("");
+  const [health, setHealth] = useState("");
   const [otherPrefs, setOtherPrefs] = useState<Prefs>({});
   const [vendors, setVendors] = useState<Vendor[]>(DEFAULT_VENDORS.map((v) => ({ ...v })));
   const [loadNote, setLoadNote] = useState<string | null>(null);
@@ -80,10 +141,32 @@ export function OnboardingForm() {
         setPhone(prof.phone ?? "");
         setCohort(prof.cohort || "student");
         const prefs = prof.prefs ?? {};
-        const { budget_ceiling_usd, availability, caller_name, ...rest } = prefs;
+        const {
+          budget_ceiling_usd,
+          availability,
+          caller_name,
+          current_address,
+          new_address,
+          move_date,
+          bedrooms: beds,
+          household_size,
+          current_providers,
+          insurance,
+          student_proof,
+          ...rest
+        } = prefs;
         setBudget(budget_ceiling_usd === null || budget_ceiling_usd === undefined ? "" : String(budget_ceiling_usd));
         setSlots(toSlots(availability));
         setCallerName(typeof caller_name === "string" ? caller_name : "");
+        setCurrentAddress(toAddressDraft(current_address));
+        setNewAddress(toAddressDraft(new_address));
+        setMoveDate(typeof move_date === "string" ? move_date : "");
+        setBedrooms(beds && BEDROOMS.includes(beds) ? beds : "");
+        setHouseholdSize(household_size === null || household_size === undefined ? "" : String(household_size));
+        setProviders(toProviderDrafts(current_providers));
+        setDental(insurance?.dental ?? "");
+        setHealth(insurance?.health ?? "");
+        setStudentProof(typeof student_proof === "string" ? student_proof : "");
         setOtherPrefs(rest);
       } else if (p.status === "rejected") {
         notes.push(`profile not loaded (${describeError(p.reason)})`);
@@ -100,11 +183,13 @@ export function OnboardingForm() {
 
   const updateVendor = (i: number, patch: Partial<Vendor>) =>
     setVendors((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-
-  const addVendor = () =>
-    setVendors((rows) => [...rows, { key: "", name: "", track: "quote", phone: "", is_demo: true }]);
-
+  const addVendor = () => setVendors((rows) => [...rows, { key: "", name: "", track: "quote", phone: "", is_demo: true }]);
   const removeVendor = (i: number) => setVendors((rows) => rows.filter((_, idx) => idx !== i));
+
+  const updateProvider = (i: number, patch: Partial<ProviderDraft>) =>
+    setProviders((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addProvider = () => setProviders((rows) => [...rows, { category: "internet", name: "", monthly_usd: "", contract_end: "" }]);
+  const removeProvider = (i: number) => setProviders((rows) => rows.filter((_, idx) => idx !== i));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,11 +198,20 @@ export function OnboardingForm() {
     setError(null);
     try {
       const budgetNum = budget.trim() === "" ? null : Number(budget);
+      const household = householdSize.trim() === "" ? null : Number(householdSize);
       const prefs: Prefs = {
         ...otherPrefs,
         budget_ceiling_usd: budgetNum !== null && Number.isFinite(budgetNum) ? budgetNum : null,
         availability: fromSlots(slots),
         caller_name: callerName.trim() || null,
+        current_address: fromAddressDraft(currentAddress),
+        new_address: fromAddressDraft(newAddress),
+        move_date: moveDate || null,
+        bedrooms: bedrooms || null,
+        household_size: household !== null && Number.isFinite(household) ? household : null,
+        current_providers: fromProviderDrafts(providers),
+        insurance: dental.trim() || health.trim() ? { dental: dental.trim() || null, health: health.trim() || null } : null,
+        student_proof: studentProof.trim() || null,
       };
       await upsertProfile({
         display_name: displayName.trim() || null,
@@ -146,208 +240,206 @@ export function OnboardingForm() {
   // ready.html: the post-save confirmation.
   if (saved) {
     return (
-      <main className="mx-auto w-full max-w-xl flex-1 px-4 py-12 sm:px-6">
-        <Progress step={2} />
-        <div className="mt-8 grid h-16 w-16 place-items-center rounded-full bg-mint font-display text-2xl text-bg" aria-hidden="true">
+      <AuthShell>
+        <Progress step={3} />
+        <div className="big-mark" aria-hidden="true">
           ✓
         </div>
-        <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight sm:text-4xl">You&rsquo;re set</h1>
-        <p className="mt-3 text-muted">
-          Your profile and roster are saved. Tell Dormammu what you need handled and it starts calling. It says it is an
-          AI before anything else, on every call.
+        <h1>You&rsquo;re set</h1>
+        <p>
+          Your profile is saved. Tell Dormammu what you need handled and it starts researching, then calling. It says it is an AI before
+          anything else, on every call.
         </p>
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <Link href="/" className="rounded-full bg-mint px-5 py-3 text-base font-medium text-bg hover:bg-white">
-            Open Dormammu
-          </Link>
-          <button type="button" onClick={() => setSaved(false)} className="text-sm text-muted hover:text-fg">
+        <Link className="btn btn-primary btn-block" href="/">
+          Open Dormammu
+        </Link>
+        <p className="auth-alt">
+          <button type="button" onClick={() => setSaved(false)}>
             Edit again
           </button>
-        </div>
-      </main>
+        </p>
+      </AuthShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
-      <Progress step={0} />
+    <AuthShell wide>
+      <Progress step={1} />
 
-      <form onSubmit={save} className="mt-6 space-y-8">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Set up your profile</h1>
-          <p className="mt-2 text-muted">
-            This is what the agent knows about you when it calls. Your profile decides which discounts it asks for, and
-            it only claims what you tell it here. Phone numbers live only in your roster table; they never go into git,
-            and the UI masks them.
-          </p>
-          {loadNote ? <p className="mt-2 font-mono text-xs text-warn">{loadNote}</p> : null}
-          {!loaded ? <p className="mt-2 font-mono text-xs text-dim">loading…</p> : null}
+      <form onSubmit={save}>
+        <h1>Set up your profile</h1>
+        <p>
+          This is what the agent knows about you before it researches or calls anyone. Your profile decides which discounts it asks for,
+          and it only claims what you tell it here. Phone numbers never go into git, and the UI masks them.
+        </p>
+        {loadNote ? <p className="note warn">{loadNote}</p> : null}
+        {!loaded ? <p className="dash-note">Loading…</p> : null}
+
+        <div className="fields-2">
+          <Field label="Name the agent calls on behalf of">
+            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" placeholder="Maya Patel" />
+          </Field>
+          <Field label="Your mobile" hint="For transfers and callbacks.">
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 415 555 0100" autoComplete="tel" />
+          </Field>
         </div>
 
-        <Panel className="space-y-5 p-5">
-          <h2 className="font-mono text-xs uppercase tracking-widest text-teal">Profile</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="name the agent calls on behalf of">
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputClass} autoComplete="name" />
-            </Field>
-            <Field label="your phone" hint="for transfers and callbacks">
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 415 555 0100"
-                autoComplete="tel"
-                className={`${inputClass} font-mono`}
-              />
-            </Field>
+        <fieldset className="field">
+          <legend>Which of these describes you?</legend>
+          <div className="pills">
+            {COHORTS.map((c) => (
+              <label key={c.key} className="pill">
+                <input type="radio" name="cohort" value={c.key} checked={cohort === c.key} onChange={() => setCohort(c.key)} />
+                <span>{c.label}</span>
+              </label>
+            ))}
           </div>
-
-          <fieldset>
-            <legend className="mb-2 block font-mono text-xs uppercase tracking-wide text-muted">which of these describes you?</legend>
-            <div className="flex flex-wrap gap-2">
-              {COHORTS.map((c) => (
-                <label key={c.key} className="relative">
-                  <input
-                    type="radio"
-                    name="cohort"
-                    value={c.key}
-                    checked={cohort === c.key}
-                    onChange={() => setCohort(c.key)}
-                    className="peer absolute inset-0 cursor-pointer opacity-0"
-                  />
-                  <span className="block rounded-full border border-line px-4 py-2 text-sm text-muted transition peer-checked:border-fg peer-checked:bg-fg peer-checked:text-bg peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-mint">
-                    {c.label}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-dim">
-              Only the student cohort ships today. On every call the agent asks for: {COHORTS[0].asks.join(", ")}. Proof vendors may
-              want: {COHORTS[0].proof}.
-            </p>
-          </fieldset>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
-              <input value={callerName} onChange={(e) => setCallerName(e.target.value)} placeholder={DEFAULT_CALLER_NAME} className={inputClass} />
-            </Field>
-            <Field label="budget ceiling (usd)">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                placeholder="900"
-                className={`${inputClass} tnum font-mono`}
-              />
-            </Field>
-          </div>
-
-          <AvailabilityEditor slots={slots} onChange={setSlots} />
-        </Panel>
-
-        <Panel className="space-y-4 p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-teal">Roster</h2>
-            <button type="button" onClick={addVendor} className="text-xs text-accent hover:underline">
-              + add row
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm">
-              <thead>
-                <tr className="font-mono text-[11px] uppercase tracking-wide text-muted">
-                  <th className="pb-2 pr-2 text-left font-normal">key</th>
-                  <th className="pb-2 pr-2 text-left font-normal">name</th>
-                  <th className="pb-2 pr-2 text-left font-normal">track</th>
-                  <th className="pb-2 pr-2 text-left font-normal">phone</th>
-                  <th className="pb-2 pr-2 text-left font-normal">demo</th>
-                  <th className="pb-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {vendors.map((v, i) => (
-                  <tr key={i} className="border-t border-line">
-                    <td className="py-1.5 pr-2">
-                      <input
-                        value={v.key}
-                        onChange={(e) => updateVendor(i, { key: e.target.value })}
-                        aria-label="vendor key"
-                        className={`${inputClass} font-mono`}
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        value={v.name}
-                        onChange={(e) => updateVendor(i, { name: e.target.value })}
-                        aria-label="vendor name"
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <select
-                        value={v.track}
-                        onChange={(e) => updateVendor(i, { track: e.target.value as Track })}
-                        aria-label="track"
-                        className={inputClass}
-                      >
-                        {TRACKS.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        value={v.phone}
-                        onChange={(e) => updateVendor(i, { phone: e.target.value })}
-                        placeholder="+1…"
-                        autoComplete="off"
-                        aria-label="vendor phone"
-                        className={`${inputClass} font-mono`}
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2 text-center">
-                      <input
-                        type="checkbox"
-                        checked={v.is_demo}
-                        onChange={(e) => updateVendor(i, { is_demo: e.target.checked })}
-                        aria-label="demo vendor"
-                        className="h-4 w-4 accent-[var(--color-accent)]"
-                      />
-                    </td>
-                    <td className="py-1.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => removeVendor(i)}
-                        className="px-2 text-xs text-dim hover:text-bad"
-                        aria-label="remove vendor"
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-xs text-dim">
-            Only rows in this table are dialable. The router picks by key and never sees a number. Today every number
-            here belongs to someone in the room.
+          <p className="hint">
+            Only the student cohort ships today. On every call the agent asks for: {COHORTS[0].asks.join(", ")}. Proof vendors may want:{" "}
+            {COHORTS[0].proof}.
           </p>
-        </Panel>
+        </fieldset>
+        <Field label="Proof of student status" hint="What the agent can say is on file, e.g. “stanford.edu email on file”.">
+          <input type="text" value={studentProof} onChange={(e) => setStudentProof(e.target.value)} placeholder="stanford.edu email on file" />
+        </Field>
+
+        <AddressFields legend="Where you live now" value={currentAddress} onChange={setCurrentAddress} />
+        <AddressFields legend="Where you are moving" value={newAddress} onChange={setNewAddress} />
+
+        <div className="fields-2">
+          <Field label="Move date">
+            <input type="date" value={moveDate} onChange={(e) => setMoveDate(e.target.value)} className="num" />
+          </Field>
+          <Field label="People in the household">
+            <input type="number" min={1} step={1} value={householdSize} onChange={(e) => setHouseholdSize(e.target.value)} placeholder="1" className="num" />
+          </Field>
+        </div>
+        <fieldset className="field">
+          <legend>Bedrooms</legend>
+          <div className="pills">
+            {BEDROOMS.map((b) => (
+              <label key={b} className="pill">
+                <input type="radio" name="bedrooms" value={b} checked={bedrooms === b} onChange={() => setBedrooms(b)} />
+                <span>{b === "studio" ? "Studio" : b}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="field">
+          <legend>What you pay for now</legend>
+          <p className="hint">Internet, phone, gym, insurance, utilities, streaming. The research stage compares against these.</p>
+          <ul className="roster">
+            {providers.map((p, i) => (
+              <li key={i}>
+                <label>
+                  <span className="lbl">Name</span>
+                  <input className="input" value={p.name} onChange={(e) => updateProvider(i, { name: e.target.value })} aria-label="provider name" />
+                </label>
+                <label>
+                  <span className="lbl">Category</span>
+                  <select className="input" value={p.category} onChange={(e) => updateProvider(i, { category: e.target.value as ProviderCategory })} aria-label="category">
+                    {PROVIDER_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="lbl">$ per month</span>
+                  <input className="input num" type="number" min={0} step={1} value={p.monthly_usd} onChange={(e) => updateProvider(i, { monthly_usd: e.target.value })} aria-label="monthly cost" />
+                </label>
+                <label>
+                  <span className="lbl">Contract ends</span>
+                  <input className="input num" type="date" value={p.contract_end} onChange={(e) => updateProvider(i, { contract_end: e.target.value })} aria-label="contract end" />
+                </label>
+                <span />
+                <button type="button" className="rm" onClick={() => removeProvider(i)} aria-label="remove provider">
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="add" onClick={addProvider}>
+            + Add something you pay for
+          </button>
+        </fieldset>
+
+        <div className="fields-2">
+          <Field label="Dental insurance" hint="Free text, as you would say it on the phone.">
+            <input type="text" value={dental} onChange={(e) => setDental(e.target.value)} placeholder="Delta Dental PPO through school" />
+          </Field>
+          <Field label="Health insurance">
+            <input type="text" value={health} onChange={(e) => setHealth(e.target.value)} placeholder="Cardinal Care" />
+          </Field>
+        </div>
+
+        <div className="fields-2">
+          <Field label="Name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
+            <input type="text" value={callerName} onChange={(e) => setCallerName(e.target.value)} placeholder={DEFAULT_CALLER_NAME} />
+          </Field>
+          <Field label="Budget ceiling (USD)">
+            <input type="number" min={0} step={1} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="900" className="num" />
+          </Field>
+        </div>
+
+        <AvailabilityEditor slots={slots} onChange={setSlots} />
+
+        <fieldset className="field">
+          <legend>I already know who to call</legend>
+          <p className="hint">
+            Optional. Only rows here are dialable: the router picks by key and never sees a number. Today every number belongs to someone
+            in the room.
+          </p>
+          <ul className="roster">
+            {vendors.map((v, i) => (
+              <li key={i}>
+                <label>
+                  <span className="lbl">Name</span>
+                  <input className="input" value={v.name} onChange={(e) => updateVendor(i, { name: e.target.value })} aria-label="vendor name" />
+                </label>
+                <label>
+                  <span className="lbl">Key</span>
+                  <input className="input" value={v.key} onChange={(e) => updateVendor(i, { key: e.target.value })} aria-label="vendor key" />
+                </label>
+                <label>
+                  <span className="lbl">Track</span>
+                  <select className="input" value={v.track} onChange={(e) => updateVendor(i, { track: e.target.value as Track })} aria-label="track">
+                    {TRACKS.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="lbl">Phone</span>
+                  <input className="input num" value={v.phone} onChange={(e) => updateVendor(i, { phone: e.target.value })} placeholder="+1…" autoComplete="off" aria-label="vendor phone" />
+                </label>
+                <label className="demo">
+                  <input type="checkbox" checked={v.is_demo} onChange={(e) => updateVendor(i, { is_demo: e.target.checked })} aria-label="demo vendor" />
+                  Demo
+                </label>
+                <button type="button" className="rm" onClick={() => removeVendor(i)} aria-label="remove vendor">
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="add" onClick={addVendor}>
+            + Add a vendor
+          </button>
+        </fieldset>
 
         <ErrorNote message={error} />
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={busy} variant="mint">
-            {busy ? "saving…" : "Finish setup"}
-          </Button>
-          <Link href="/" className="text-xs text-dim hover:text-fg">
-            skip
-          </Link>
-        </div>
+        <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
+          {busy ? "Saving…" : "Finish setup"}
+        </button>
+        <p className="auth-alt">
+          <Link href="/">Skip for now</Link>
+        </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }

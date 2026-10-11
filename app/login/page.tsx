@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Brand, Button, ErrorNote, Field, inputClass, Panel } from "@/components/ui";
+import { AuthShell, Progress } from "@/components/shell";
+import { ErrorNote, Field } from "@/components/ui";
 import { ApiError, getVendors, signup } from "@/lib/api";
 import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -95,112 +96,72 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center px-4 py-16">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex items-center justify-between">
-          <Brand />
-          <Link href="/" className="font-mono text-xs text-dim hover:text-fg">
-            back
+    <AuthShell>
+      <Progress step={0} />
+
+      {!isSupabaseConfigured() ? (
+        <>
+          <h1>Dev mode</h1>
+          <p>NEXT_PUBLIC_SUPABASE_URL is empty, so there is no sign-in. The Python service uses DEV_USER_ID for every request.</p>
+          <Link className="btn btn-primary btn-block" href="/">
+            Go to the app
           </Link>
-        </div>
-        <Panel className="p-6">
-          {!isSupabaseConfigured() ? (
-            <div className="space-y-3">
-              <h1 className="text-lg font-semibold">Dev mode</h1>
-              <p className="text-sm text-muted">
-                NEXT_PUBLIC_SUPABASE_URL is empty, so there is no sign-in. The Python service uses
-                DEV_USER_ID for every request.
-              </p>
-              <Link href="/" className="text-sm text-accent hover:underline">
-                Go to the app
-              </Link>
-            </div>
-          ) : (
-            <form onSubmit={submit} className="space-y-4">
-              <div>
-                <h1 className="text-lg font-semibold">{mode === "signin" ? "Sign in" : "Create account"}</h1>
-                <p className="mt-1 text-sm text-muted">
-                  {mode === "signin"
-                    ? "Email and password."
-                    : "Pick a password. You are signed in right away, nothing to confirm."}
-                </p>
-              </div>
-              <Field label="email">
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@stanford.edu"
-                  className={inputClass}
-                />
-              </Field>
-              <Field
-                label="password"
-                hint={mode === "signup" ? `at least ${MIN_PASSWORD} characters` : undefined}
-              >
-                <input
-                  type="password"
-                  required
-                  minLength={MIN_PASSWORD}
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              {mode === "signup" ? (
-                <Field label="name" hint="optional, shown on your profile">
-                  <input
-                    type="text"
-                    autoComplete="name"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className={inputClass}
-                  />
-                </Field>
-              ) : null}
-              <ErrorNote message={error} />
-              <Button type="submit" disabled={!canSubmit} className="w-full">
-                {busy
-                  ? mode === "signin"
-                    ? "signing in…"
-                    : "creating account…"
-                  : mode === "signin"
-                    ? "Sign in"
-                    : "Create account"}
-              </Button>
-              <p className="text-center text-xs text-dim">
-                {mode === "signin" ? (
-                  <>
-                    New here?{" "}
-                    <button
-                      type="button"
-                      className="text-accent hover:underline"
-                      onClick={() => switchMode("signup")}
-                    >
-                      Create an account
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      className="text-accent hover:underline"
-                      onClick={() => switchMode("signin")}
-                    >
-                      Sign in
-                    </button>
-                  </>
-                )}
-              </p>
-            </form>
-          )}
-        </Panel>
-      </div>
-    </main>
+        </>
+      ) : (
+        <form onSubmit={submit}>
+          <h1>{mode === "signin" ? "Sign in" : "Create an account"}</h1>
+          <p>{mode === "signin" ? "Your email and password." : "Pick a password. You are signed in right away, nothing to confirm."}</p>
+
+          <Field label="Email" hint="Have a university email? Use it. It doubles as proof for student rates.">
+            <input
+              type="email"
+              required
+              autoFocus
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@university.edu"
+            />
+          </Field>
+          <Field label="Password" hint={mode === "signup" ? `At least ${MIN_PASSWORD} characters.` : undefined}>
+            <input
+              type="password"
+              required
+              minLength={MIN_PASSWORD}
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </Field>
+          {mode === "signup" ? (
+            <Field label="Name the agent calls on behalf of" hint="Optional, shown on your profile.">
+              <input type="text" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Maya Patel" />
+            </Field>
+          ) : null}
+          <ErrorNote message={error} />
+          <button type="submit" className="btn btn-primary btn-block" disabled={!canSubmit}>
+            {busy ? (mode === "signin" ? "Signing in…" : "Creating your account…") : mode === "signin" ? "Sign in" : "Create account"}
+          </button>
+          <p className="auth-alt">
+            {mode === "signin" ? (
+              <>
+                New here?{" "}
+                <button type="button" onClick={() => switchMode("signup")}>
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button type="button" onClick={() => switchMode("signin")}>
+                  Sign in
+                </button>
+              </>
+            )}
+          </p>
+        </form>
+      )}
+    </AuthShell>
   );
 }

@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
+import { DM_Sans, Outfit } from "next/font/google";
 
 import { AppNav } from "@/components/AppNav";
+import { CloudDefs } from "@/components/shell";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 import "./globals.css";
+
+// The prototype's two faces (frontend/styles.css --display / --body). globals.css reads these two
+// variables into --display and --body, with his system stacks as the fallback.
+const display = Outfit({ subsets: ["latin"], weight: "variable", display: "swap", variable: "--font-display" });
+const body = DM_Sans({ subsets: ["latin"], weight: "variable", display: "swap", variable: "--font-body", axes: ["opsz"] });
 
 export const metadata: Metadata = {
   title: "Dormammu",
@@ -25,8 +32,9 @@ async function sessionState(): Promise<{ signedIn: boolean; email: string | null
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { signedIn, email } = await sessionState();
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-bg text-fg font-sans">
+    <html lang="en" className={`${display.variable} ${body.variable} h-full`} data-scroll-behavior="smooth">
+      <body className="relative min-h-full flex flex-col">
+        <CloudDefs />
         <AppNav initialSignedIn={signedIn} email={email} />
         {children}
       </body>

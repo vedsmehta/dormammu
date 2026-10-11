@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { ErrorNote } from "@/components/ui";
 import { createRun } from "@/lib/api";
@@ -19,8 +19,8 @@ const EXAMPLES: { label: string; fill: string }[] = [
 ];
 
 /**
- * The ask box. POST /api/py/runs awaits the fan-out (plan + place calls), so the run id only exists
- * once it returns; the button shows that wait, then we route to the run.
+ * The ask box from dashboard.html. POST /api/py/runs awaits the fan-out (plan + place calls), so the
+ * run id only exists once it returns; the button shows that wait, then we route to the run.
  */
 export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
   const router = useRouter();
@@ -44,8 +44,8 @@ export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <div className="flex flex-col gap-2 rounded-2xl border border-line bg-panel p-2 focus-within:border-mint/60 sm:flex-row sm:items-center sm:rounded-full sm:pl-5">
+    <>
+      <form onSubmit={submit} className="askbox rise" style={{ "--d": ".2s" } as CSSProperties}>
         <input
           type="text"
           value={text}
@@ -55,46 +55,27 @@ export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
           autoFocus={autoFocus}
           autoComplete="off"
           disabled={busy}
-          className="min-w-0 flex-1 bg-transparent px-3 py-3 text-lg text-fg placeholder:text-dim focus:outline-none disabled:opacity-60 sm:px-0"
         />
-        <button
-          type="submit"
-          disabled={busy || text.trim().length === 0}
-          className="rounded-full bg-mint px-5 py-3 text-base font-medium text-bg transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? (
-            <span className="font-mono text-sm">
-              dispatching<span className="animate-blink">…</span>
-            </span>
-          ) : (
-            "Handle it"
-          )}
+        <button type="submit" className="btn btn-primary" disabled={busy || text.trim().length === 0}>
+          {busy ? "Dispatching…" : "Handle it"}
         </button>
-      </div>
-      <div className="flex flex-wrap gap-2" aria-label="Examples">
+      </form>
+      <div className="chips rise" style={{ "--d": ".3s" } as CSSProperties} aria-label="Examples">
         {EXAMPLES.map((ex) => (
           <button
             key={ex.label}
             type="button"
+            className="glass-pill"
             disabled={busy}
             onClick={() => setText(ex.fill)}
             aria-pressed={text === ex.fill}
-            className={`rounded-full border px-3 py-1.5 text-xs transition ${
-              text === ex.fill
-                ? "border-mint bg-mint text-bg"
-                : "border-line bg-panel text-muted hover:border-muted hover:text-fg"
-            }`}
           >
             {ex.label}
           </button>
         ))}
       </div>
-      {busy ? (
-        <p className="font-mono text-xs text-muted">
-          planning the roster and placing calls; the run opens as soon as the fan-out is out
-        </p>
-      ) : null}
+      {busy ? <p className="note">Planning the roster and placing calls. The run opens as soon as the fan-out is out.</p> : null}
       <ErrorNote message={error} />
-    </form>
+    </>
   );
 }

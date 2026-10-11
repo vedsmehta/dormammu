@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { callHref, summarizeOutcome, TONE_CLASS } from "@/components/calls/summary";
+import { callHref, summarizeOutcome } from "@/components/calls/summary";
 import { RequestForm } from "@/components/home/RequestForm";
 import { RunList } from "@/components/home/RunList";
-import { Chip, Dot, ErrorNote, Loading, Panel, PanelTitle, Tag, Wave } from "@/components/ui";
+import { AppShell } from "@/components/shell";
+import { Dot, ErrorNote, Loading, Panel, PanelTitle, Tag, Wave } from "@/components/ui";
 import { assembleRuns, getLedger, getProfile, getRuns, tickRun } from "@/lib/api";
 import {
   describeError,
@@ -29,6 +30,8 @@ const TICK_MS = 2000;
 
 type CallWithRun = Call & { request: string };
 
+const d = (s: string) => ({ "--d": s }) as CSSProperties;
+
 function runActive(run: AssembledRun): boolean {
   if (run.calls.length === 0) return run.status === "dispatching" || run.status === "running";
   return run.calls.some((c) => !isTerminal(c.state));
@@ -43,6 +46,7 @@ function wallSeconds(run: AssembledRun): number | null {
   return Math.max(0, (end - start) / 1000);
 }
 
+/** The .panel.stat tiles across the top of the board. The first goes dark (.hot) while calls are live. */
 function StatTile({
   label,
   value,
@@ -51,6 +55,7 @@ function StatTile({
   href,
   hot,
   live,
+  index,
 }: {
   label: string;
   value: string;
@@ -59,61 +64,60 @@ function StatTile({
   href: string;
   hot?: boolean;
   live?: boolean;
+  index: number;
 }) {
   return (
-    <Link
-      href={href}
-      className={`block rounded-2xl border p-4 transition hover:-translate-y-0.5 ${
-        hot ? "border-mint/40 bg-mint/10" : "border-line bg-panel hover:border-muted"
-      }`}
-    >
-      <span className="flex items-center gap-2 text-xs text-muted">
-        {live ? <Dot state="talking" /> : null}
+    <Link href={href} className={hot ? "panel stat hot" : "panel stat"} style={{ "--i": index } as CSSProperties}>
+      <span className="lbl">
+        {live ? <span className="dot talking" aria-hidden="true" /> : null}
         {label}
       </span>
-      <b className="tnum mt-2 block font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+      <b className="num">
         {value}
-        {unit ? <span className="ml-1 text-sm font-normal text-muted">{unit}</span> : null}
+        {unit ? <i>{unit}</i> : null}
       </b>
-      <small className="mt-1 block text-xs text-dim">{note}</small>
+      <small>{note}</small>
     </Link>
   );
 }
 
+/** One .mini row: dot, vendor, state or sub, result. */
 function MiniRow({ call }: { call: CallWithRun }) {
   const s = summarizeOutcome(call);
+  const live = !isTerminal(call.state);
   return (
-    <Link
-      href={callHref(call)}
-      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-t border-line py-2.5 text-sm transition hover:pl-2"
-    >
+    <Link href={callHref(call)} className="mini">
       <Dot state={call.state} />
-      <span className="min-w-0">
-        <span className="block truncate font-medium">{call.target_name}</span>
-        <span className="block truncate text-xs text-muted">
-          {trackLabel(call.track)}
-          {s.sub ? ` · ${s.sub}` : ""}
-        </span>
+      <span className="who">{call.target_name}</span>
+      <span className="st">
+        {live ? (
+          <>
+            <span className={s.tone === "ok" ? "t-talking" : s.tone === "warn" ? "t-ringing" : s.tone === "muted" ? "t-muted" : ""}>{s.main}</span>
+            {call.state === "talking" ? <Wave /> : null}
+          </>
+        ) : (
+          <>
+            {trackLabel(call.track)}
+            {s.sub ? ` · ${s.sub}` : ""}
+          </>
+        )}
       </span>
-      <span className={`tnum text-right font-mono text-sm ${TONE_CLASS[s.tone]}`}>
-        {s.main}
-        {call.state === "talking" ? <Wave /> : null}
-      </span>
+      <span className={live ? "res" : s.tone === "warn" || s.tone === "bad" ? "res t-warn" : "res"}>{live ? "" : s.main}</span>
     </Link>
   );
 }
 
-function LedgerLine({ row, due }: { row: LedgerRow; due: boolean }) {
+function LedgerLine({ row, due, index }: { row: LedgerRow; due: boolean; index: number }) {
   return (
-    <li className="border-t border-line py-2.5 first:border-t-0">
-      <time className={`block font-mono text-xs ${due ? "text-warn" : "text-dim"}`}>
-        {row.expires_on ? `${due ? "Due " : ""}${fmtDay(row.expires_on)}` : row.effective_on ? `From ${fmtDay(row.effective_on)}` : "Undated"}
+    <li className={due ? "next" : undefined} style={{ "--i": index } as CSSProperties}>
+      <time className={due ? "due" : undefined}>
+        {row.expires_on ? `${due ? "Due · " : ""}${fmtDay(row.expires_on)}` : row.effective_on ? `From ${fmtDay(row.effective_on)}` : "Undated"}
       </time>
-      <b className="block text-sm font-medium">{row.label}</b>
-      <span className="text-xs text-muted">
+      <b>{row.label}</b>
+      <p>
         {row.kind.replace("_", " ")}
         {row.amount_usd !== null ? ` · ${fmtUsd(row.amount_usd)}` : ""}
-      </span>
+      </p>
     </li>
   );
 }
@@ -211,220 +215,195 @@ export function Dashboard({ email }: { email: string | null }) {
           ? "Nothing yet. Tell Dormammu what you need handled."
           : "Nothing is running right now.";
 
+  const head = (
+    <div className="dash-top">
+      <h1 className="rise" style={d(".1s")}>
+        {greeting}, {name}
+      </h1>
+      <p className="rise" style={d(".15s")}>
+        {sub}
+      </p>
+      <RequestForm />
+      <ErrorNote message={error} />
+    </div>
+  );
+
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-      <header className="animate-rise">
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-          {greeting}, {name}
-        </h1>
-        <p className="mt-2 text-muted">{sub}</p>
-        <div className="mt-6">
-          <RequestForm />
+    <AppShell head={head} wide>
+      <div className="board">
+        <div className="stats">
+          <StatTile
+            index={0}
+            label="Running now"
+            value={loaded ? String(liveCalls.length) : "…"}
+            note={liveCalls.length ? "calls at the same time" : "no live calls"}
+            href={featured ? `/runs/${featured.id}` : "/calls"}
+            hot={liveCalls.length > 0}
+            live={liveCalls.length > 0}
+          />
+          <StatTile
+            index={1}
+            label="Needs you"
+            value={ledger ? String(due.length) : "…"}
+            note={due.length ? "ledger rows due now" : "nothing due in the ledger"}
+            href="/ledger"
+          />
+          <StatTile index={2} label="Calls made" value={loaded ? String(allCalls.length) : "…"} note={scope || "loading"} href="/calls" />
+          <StatTile
+            index={3}
+            label="On the phone for you"
+            value={loaded ? fmtDurationWords(talkSeconds) : "…"}
+            note={loaded ? `${doneCalls.length} finished ${doneCalls.length === 1 ? "call" : "calls"}, ${scope}` : "loading"}
+            href="/calls"
+          />
         </div>
-      </header>
 
-      <div className="mt-4">
-        <ErrorNote message={error} />
-      </div>
-
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          label="Running now"
-          value={loaded ? String(liveCalls.length) : "…"}
-          note={liveCalls.length ? "calls at the same time" : "no live calls"}
-          href={featured ? `/runs/${featured.id}` : "/calls"}
-          hot={liveCalls.length > 0}
-          live={liveCalls.length > 0}
-        />
-        <StatTile
-          label="Needs you"
-          value={ledger ? String(due.length) : "…"}
-          note={due.length ? "ledger rows due now" : "nothing due in the ledger"}
-          href="/ledger"
-        />
-        <StatTile
-          label="Calls made"
-          value={loaded ? String(allCalls.length) : "…"}
-          note={scope || "loading"}
-          href="/calls"
-        />
-        <StatTile
-          label="On the phone for you"
-          value={loaded ? fmtDurationWords(talkSeconds) : "…"}
-          note={loaded ? `${doneCalls.length} finished ${doneCalls.length === 1 ? "call" : "calls"}, ${scope}` : "loading"}
-          href="/calls"
-        />
-      </div>
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-3">
-        <Panel className="p-5 lg:col-span-2">
-          <PanelTitle href={featured ? `/runs/${featured.id}` : undefined} linkText="Open the run">
+        <Panel className="span2" index={4} labelledBy="p-run">
+          <PanelTitle id="p-run" href={featured ? `/runs/${featured.id}` : undefined} linkText="Open the run">
             Running now
           </PanelTitle>
           {assembled === null ? (
-            <div className="mt-4">
-              <Loading />
-            </div>
+            <Loading />
           ) : featured ? (
             <>
-              <div className="mt-4 flex items-end justify-between gap-4">
-                <q className="font-display text-lg font-semibold leading-snug tracking-tight sm:text-xl">{featured.request}</q>
-                <span className="tnum font-display text-3xl font-semibold tracking-tight">
-                  {fmtDuration(wallSeconds(featured))}
-                </span>
+              <div className="runline">
+                <q>{featured.request}</q>
+                <span className="clock num">{fmtDuration(wallSeconds(featured))}</span>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
-                <span>
-                  {featured.calls.filter((c) => !isTerminal(c.state)).length} of {featured.calls.length} still going
-                </span>
+              <p>
+                {featured.calls.filter((c) => !isTerminal(c.state)).length} of {featured.calls.length} still going
                 {featured.aggregate && featured.aggregate.n_simulated > 0 ? (
-                  <Chip tone="warn">{featured.aggregate.n_simulated} simulated</Chip>
+                  <Tag tone="warn">{featured.aggregate.n_simulated} simulated</Tag>
                 ) : null}
-              </div>
-              <div className="mt-3">
+              </p>
+              <div className="list">
                 {featured.calls.map((c) => (
                   <MiniRow key={c.id} call={{ ...c, request: featured.request }} />
                 ))}
               </div>
             </>
           ) : (
-            <p className="mt-4 text-sm text-muted">No run is live. Start one above and it shows up here while the calls are out.</p>
+            <p>No run is live. Start one above and it shows up here while the calls are out.</p>
           )}
         </Panel>
 
-        <div className="grid gap-5">
-          <Panel className="p-5">
-            <PanelTitle href="/ledger" linkText="Ledger">
+        <div className="stack">
+          <Panel index={5} id="needs" labelledBy="p-needs">
+            <PanelTitle id="p-needs" href="/ledger" linkText="Ledger">
               Needs you
             </PanelTitle>
             {ledger === null ? (
-              <div className="mt-4">
-                <Loading />
-              </div>
+              <Loading />
             ) : due.length === 0 ? (
-              <p className="mt-4 text-sm text-muted">Nothing needs your yes right now.</p>
+              <p>Nothing needs your yes right now.</p>
             ) : (
               <>
-                <ul className="mt-3">
-                  {due.slice(0, 3).map((r) => (
-                    <LedgerLine key={r.id} row={r} due />
+                <ol className="rail">
+                  {due.slice(0, 3).map((r, i) => (
+                    <LedgerLine key={r.id} row={r} due index={i} />
                   ))}
-                </ul>
-                <Link
-                  href="/ledger"
-                  className="mt-3 inline-flex rounded-full bg-mint px-3 py-1.5 text-xs font-medium text-bg hover:bg-white"
-                >
-                  Review and fire the due rows
-                </Link>
+                </ol>
+                <div className="acts">
+                  <Link href="/ledger" className="btn btn-primary btn-sm">
+                    Review and fire the due rows
+                  </Link>
+                </div>
               </>
             )}
           </Panel>
-          <Panel className="p-5">
-            <PanelTitle href="/ledger" linkText="Ledger">
+          <Panel index={6} labelledBy="p-next">
+            <PanelTitle id="p-next" href="/ledger" linkText="Ledger">
               Coming up
             </PanelTitle>
             {ledger === null ? (
-              <div className="mt-4">
-                <Loading />
-              </div>
+              <Loading />
             ) : upcoming.length === 0 ? (
-              <p className="mt-4 text-sm text-muted">Nothing dated yet. A quote, a promo, or an appointment lands here.</p>
+              <p>Nothing dated yet. A quote, a promo, or an appointment lands here.</p>
             ) : (
-              <ul className="mt-3">
-                {upcoming.map((r) => (
-                  <LedgerLine key={r.id} row={r} due={false} />
+              <ol className="rail">
+                {upcoming.map((r, i) => (
+                  <LedgerLine key={r.id} row={r} due={false} index={i} />
                 ))}
-              </ul>
+              </ol>
             )}
           </Panel>
         </div>
 
-        <Panel className="p-5 lg:col-span-2">
-          <PanelTitle href="/calls" linkText="All calls">
+        <Panel className="span2" index={7} labelledBy="p-recent">
+          <PanelTitle id="p-recent" href="/calls" linkText="All calls">
             Recent calls
           </PanelTitle>
           {assembled === null ? (
-            <div className="mt-4">
-              <Loading />
-            </div>
+            <Loading />
           ) : recentCalls.length === 0 ? (
-            <p className="mt-4 text-sm text-muted">No calls yet.</p>
+            <p>No calls yet.</p>
           ) : (
-            <div className="mt-3">
+            <div className="list">
               {recentCalls.map((c) => (
-                <Link
-                  key={c.id}
-                  href={callHref(c)}
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line py-2.5 text-sm transition hover:pl-2"
-                >
+                <Link key={c.id} href={callHref(c)} className="mini">
                   <Dot state={c.state} />
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{c.target_name}</span>
-                    <span className="block truncate text-xs text-muted">{summarizeOutcome(c).main}</span>
-                  </span>
-                  <span className="tnum font-mono text-xs text-dim">{fmtDayFromTs(c.started_at)}</span>
+                  <span className="who">{c.target_name}</span>
+                  <span className="st">{summarizeOutcome(c).main}</span>
+                  <span className="res num">{fmtDayFromTs(c.started_at)}</span>
                 </Link>
               ))}
             </div>
           )}
         </Panel>
 
-        <Panel className="p-5">
-          <PanelTitle>How calls ended</PanelTitle>
+        <Panel index={8} labelledBy="p-out">
+          <PanelTitle id="p-out">How calls ended</PanelTitle>
           {assembled === null ? (
-            <div className="mt-4">
-              <Loading />
-            </div>
+            <Loading />
           ) : allCalls.length === 0 ? (
-            <p className="mt-4 text-sm text-muted">No calls to count yet.</p>
+            <p>No calls to count yet.</p>
           ) : (
             <>
               <div
-                className="mt-4 flex h-3 gap-0.5 overflow-hidden rounded-full"
+                className="bar"
                 role="img"
                 aria-label={`Of ${allCalls.length} calls: ${doneCalls.length} got an answer, ${liveCalls.length} still going, ${failedCalls.length} failed`}
               >
-                {doneCalls.length ? <i className="bg-teal" style={{ flex: doneCalls.length }} /> : null}
-                {liveCalls.length ? <i className="bg-mint" style={{ flex: liveCalls.length }} /> : null}
-                {failedCalls.length ? <i className="bg-warn" style={{ flex: failedCalls.length }} /> : null}
+                {doneCalls.length ? <i style={{ flex: doneCalls.length, background: "var(--deep)" }} /> : null}
+                {liveCalls.length ? <i style={{ flex: liveCalls.length, background: "var(--mint)" }} /> : null}
+                {failedCalls.length ? <i style={{ flex: failedCalls.length, background: "#f2b84b" }} /> : null}
               </div>
-              <ul className="mt-3 text-sm">
+              <ul className="legend">
                 {[
-                  ["Got an answer", doneCalls.length, "bg-teal"],
-                  ["Still going", liveCalls.length, "bg-mint"],
-                  ["Failed", failedCalls.length, "bg-warn"],
-                ].map(([label, n, cls]) => (
-                  <li key={String(label)} className="flex items-center justify-between border-t border-line py-2 first:border-t-0">
-                    <span className="flex items-center gap-2 text-muted">
-                      <i className={`h-2.5 w-2.5 rounded-full ${cls}`} />
+                  ["Got an answer", doneCalls.length, "var(--deep)"],
+                  ["Still going", liveCalls.length, "var(--mint)"],
+                  ["Failed", failedCalls.length, "#f2b84b"],
+                ].map(([label, n, color]) => (
+                  <li key={String(label)}>
+                    <span>
+                      <i style={{ background: String(color) }} />
                       {label}
                     </span>
-                    <b className="tnum font-mono">{n}</b>
+                    <b className="num">{n}</b>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-xs text-dim">Counted {scope}.</p>
+              <p className="dash-note">Counted {scope}.</p>
             </>
           )}
         </Panel>
+
+        <Panel className="span3" index={9} labelledBy="p-runs">
+          <PanelTitle id="p-runs" href="/onboarding" linkText="Edit roster">
+            Recent requests
+          </PanelTitle>
+          <div className="list">
+            <RunList runs={runs} />
+          </div>
+          {runs && runs.length >= 20 ? <p className="dash-note">The API lists the 20 most recent runs.</p> : null}
+        </Panel>
       </div>
 
-      <section className="mt-10">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="font-mono text-xs uppercase tracking-widest text-teal">Recent requests</h2>
-          <Link href="/onboarding" className="text-xs text-dim hover:text-fg">
-            edit roster →
-          </Link>
-        </div>
-        <RunList runs={runs} />
-        {runs && runs.length >= 20 ? <p className="mt-2 text-xs text-dim">The API lists the 20 most recent runs.</p> : null}
-      </section>
-
       {featured ? (
-        <p className="mt-8 font-mono text-[11px] text-dim">
-          <Tag tone="mint">Live</Tag> rows refresh every {TICK_MS / 1000}s while the featured run has calls out.
+        <p className="dash-note">
+          <Tag first>Live</Tag> rows refresh every {TICK_MS / 1000}s while the featured run has calls out.
         </p>
       ) : null}
-    </main>
+    </AppShell>
   );
 }

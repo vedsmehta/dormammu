@@ -1,9 +1,13 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { Dashboard } from "@/components/home/Dashboard";
+import { LandingFan } from "@/components/home/LandingFan";
+import { Clouds } from "@/components/shell";
 import { Brand } from "@/components/ui";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { COHORTS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -53,146 +57,189 @@ const HARNESS = [
   ["Knows when to stop", "Two escalations at most. Any offer that comes with conditions is brought back to you, not accepted."],
 ];
 
-/** Signed-out landing: the prototype's index.html copy, with every call to action going to /login. */
+const MARQUEE = ["internet quotes", "renters insurance", "a dentist near campus", "movers", "the ISP you forgot to cancel", "the bill that went up"];
+
+const d = (s: string) => ({ "--d": s }) as CSSProperties;
+
+/** Signed-out landing: frontend/index.html, with every call to action going to /login. */
 function Landing() {
   return (
-    <main className="flex-1">
-      <section className="border-b border-line bg-gradient-to-b from-teal-deep/30 to-bg">
-        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-          <nav className="flex items-center justify-between py-5" aria-label="Main">
+    <>
+      <header className="sky sky-deep">
+        <Clouds variant="hero" />
+        <div className="wrap">
+          <nav className="nav rise" aria-label="Main">
             <Brand />
-            <div className="flex items-center gap-4 text-sm">
-              <a href="#how" className="hidden text-muted hover:text-fg sm:inline">
-                How it works
-              </a>
-              <a href="#handles" className="hidden text-muted hover:text-fg sm:inline">
-                What it handles
-              </a>
-              <Link href="/login" className="rounded-full bg-mint px-4 py-2 text-sm font-medium text-bg hover:bg-white">
-                Sign in
+            <div className="nav-links">
+              <a href="#how">How it works</a>
+              <a href="#handles">What it handles</a>
+              <a href="#negotiation">Negotiation</a>
+              <a href="#ledger">Ledger</a>
+            </div>
+            <div className="nav-end">
+              <Link href="/login">Sign in</Link>
+              <Link className="btn btn-primary btn-sm" href="/login">
+                Get started
               </Link>
             </div>
           </nav>
-          <div className="animate-rise py-16 text-center sm:py-24">
-            <h1 className="font-display text-5xl font-semibold leading-[1.02] tracking-tight sm:text-7xl">
+
+          <div className="hero">
+            <h1 className="rise" style={d(".1s")}>
               One request.
               <br />
               Every call at once.
             </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-base text-muted sm:text-lg">
-              Dormammu knows who it is calling for. It calls every vendor at once to find the best deals you
-              qualify for and shows you the options while the calls are still live. It says it is an AI
-              before anything else. Once you approve, it closes the deal and negotiates the price for you.
+            <p className="lede rise" style={d(".25s")}>
+              Dormammu knows who it is calling for. It calls every vendor at once to find the best deals you qualify for
+              and shows you the options while the calls are still live. It says it is an AI before anything else. Once you
+              approve, it closes the deal and negotiates the price for you.
             </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link href="/login" className="rounded-full bg-mint px-5 py-3 text-base font-medium text-bg hover:bg-white">
-                Get started
-              </Link>
-              <Link
-                href="/login"
-                className="rounded-full border border-line bg-panel px-5 py-3 text-base text-fg hover:border-muted"
-              >
-                Sign in
-              </Link>
-            </div>
+            <LandingFan />
           </div>
         </div>
-      </section>
+      </header>
 
-      <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-        <p className="mx-auto max-w-3xl py-16 text-center font-display text-2xl font-medium leading-snug tracking-tight text-muted sm:text-3xl">
-          Finding a good deal means calling around.{" "}
-          <strong className="font-medium text-fg">Getting it means knowing what to ask for, and negotiating.</strong>{" "}
-          Dormammu does both, and nothing goes ahead until you say yes.
-        </p>
-
-        <section id="how" className="border-t border-line py-14">
-          <span className="font-mono text-xs uppercase tracking-widest text-teal">How it works</span>
-          <h2 className="mt-3 max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-            It finds the deals. You approve. It closes them.
-          </h2>
-          <ol className="mt-8 divide-y divide-line border-y border-line">
-            {STEPS.map((s) => (
-              <li key={s.n} className="grid gap-3 py-6 sm:grid-cols-[6rem_1fr_2fr] sm:gap-6">
-                <span className="font-display text-4xl font-light tracking-tight text-teal">{s.n}</span>
-                <h3 className="font-display text-xl font-semibold tracking-tight">{s.title}</h3>
-                <p className="text-muted">{s.body}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section id="handles" className="border-t border-line py-14">
-          <span className="font-mono text-xs uppercase tracking-widest text-teal">What it handles</span>
-          <ul className="mt-6 divide-y divide-line border-y border-line">
-            {HANDLES.map((h) => (
-              <li key={h.title} className="grid gap-2 py-6 sm:grid-cols-2 sm:gap-6">
-                <h3 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">{h.title}</h3>
-                <p className="text-muted">{h.body}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section id="negotiation" className="border-t border-line py-14">
-          <span className="font-mono text-xs uppercase tracking-widest text-teal">The negotiation harness</span>
-          <h2 className="mt-3 max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-            It negotiates the way the research says works.
-          </h2>
-          <ul className="mt-8 divide-y divide-line border-y border-line">
-            {HARNESS.map(([title, body]) => (
-              <li key={title} className="grid gap-2 py-5 sm:grid-cols-2 sm:gap-6">
-                <h3 className="font-display text-xl font-semibold tracking-tight">{title}</h3>
-                <p className="text-muted">{body}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-6 text-sm text-muted">
-            The harness is a step-by-step playbook built from published research on bill negotiation and tested
-            before it calls for you.
-          </p>
-        </section>
-
-        <section id="ledger" className="grid gap-8 border-t border-line py-14 sm:grid-cols-2">
-          <div>
-            <span className="font-mono text-xs uppercase tracking-widest text-teal">The ledger</span>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">
-              It remembers every account, so you don&rsquo;t have to.
-            </h2>
-            <p className="mt-4 text-muted">
-              Each call writes down what was agreed: the vendor, the rate, when the promo ends, when it renews.
-              That list is yours, in one place.
+      <main className="sheet">
+        <div className="statement">
+          <div className="wrap">
+            <p className="reveal">
+              Finding a good deal means calling around. <strong>Getting it means knowing what to ask for, and negotiating.</strong>{" "}
+              Dormammu does both, and nothing goes ahead until you say yes.
             </p>
-            <p className="mt-3 text-muted">When a date comes up, Dormammu asks first. You say yes, it makes the call.</p>
           </div>
+        </div>
+
+        <div className="marquee" aria-hidden="true">
           <div>
-            <span className="font-mono text-xs uppercase tracking-widest text-teal">Your profile</span>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">It asks for what you actually qualify for.</h2>
-            <p className="mt-4 text-muted">
-              Many discounts exist but only get applied when someone asks. Dormammu knows your profile, asks on every
-              call, and only ever claims what is true about you. You can read exactly what the agent is told to ask for.
+            {[...MARQUEE, ...MARQUEE].map((m, i) => (
+              <span key={i}>{m}</span>
+            ))}
+          </div>
+        </div>
+
+        <section className="section" id="how">
+          <div className="wrap">
+            <span className="eyebrow">How it works</span>
+            <h2 className="reveal">It finds the deals. You approve. It closes them.</h2>
+            <ol className="steps-list">
+              {STEPS.map((s) => (
+                <li key={s.n} className="reveal">
+                  <span className="n">{s.n}</span>
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="section" id="handles">
+          <div className="wrap">
+            <span className="eyebrow">What it handles</span>
+            <ul className="handles">
+              {HANDLES.map((h) => (
+                <li key={h.title} className="reveal">
+                  <h3>{h.title}</h3>
+                  <p>{h.body}</p>
+                </li>
+              ))}
+            </ul>
+            <p className="handles-note reveal">
+              Nobody picks up? Dormammu carries the same conversation over text instead of leaving a &ldquo;call us back&rdquo;.
             </p>
           </div>
         </section>
 
-        <section className="border-t border-line py-16 text-center">
-          <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-5xl">Hand off the phone calls.</h2>
-          <p className="mt-3 text-muted">Sign in with your email and password, or create an account.</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/login" className="rounded-full bg-mint px-5 py-3 text-base font-medium text-bg hover:bg-white">
+        <section className="section" id="negotiation">
+          <div className="wrap">
+            <span className="eyebrow">The negotiation harness</span>
+            <h2 className="reveal">It negotiates the way the research says works.</h2>
+            <ul className="handles tight">
+              {HARNESS.map(([title, body]) => (
+                <li key={title} className="reveal">
+                  <h3>{title}</h3>
+                  <p>{body}</p>
+                </li>
+              ))}
+            </ul>
+            <p className="handles-note reveal">
+              The harness is a step-by-step playbook built from published research on bill negotiation and tested before it
+              calls for you.
+            </p>
+          </div>
+        </section>
+
+        <section className="section" id="ledger">
+          <div className="wrap duo">
+            <div className="copy reveal">
+              <span className="eyebrow">The ledger</span>
+              <h2>It remembers every account, so you don&rsquo;t have to.</h2>
+              <p>
+                Each call writes down what was agreed: the vendor, the rate, when the promo ends, when it renews. That list is
+                yours, in one place.
+              </p>
+              <p>When a date comes up, Dormammu asks first. You say yes, it makes the call.</p>
+            </div>
+            <div className="thread" aria-label="Example conversation">
+              <small className="reveal">Eleven months later</small>
+              <p className="bubble reveal">
+                Your Sutro Fiber promo ends in 21 days. Your bill goes from $50 to $70 a month. Want me to call and ask them to
+                keep the rate?
+              </p>
+              <p className="bubble me reveal">Yes, call them.</p>
+              <p className="bubble reveal">Done. They kept you at $50 for another 12 months. You will need to re-verify your .edu email.</p>
+              <small className="reveal">Example. The vendor and prices are made up.</small>
+            </div>
+          </div>
+        </section>
+
+        <section className="section" id="profile">
+          <div className="wrap duo">
+            <div className="copy reveal">
+              <span className="eyebrow">Your profile</span>
+              <h2>It asks for what you actually qualify for.</h2>
+              <p>
+                Many discounts exist but only get applied when someone asks. Dormammu knows your profile, asks on every call,
+                and only ever claims what is true about you.
+              </p>
+              <p>You can read exactly what the agent is told to ask for.</p>
+            </div>
+            <ul className="asks reveal" aria-label="Asked for on every call">
+              {COHORTS[0].asks.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <footer className="sky sky-dusk closing">
+        <Clouds variant="closing" />
+        <div className="wrap">
+          <h2 className="reveal">Hand off the phone calls.</h2>
+          <p className="reveal">Sign in with your email and password, or create an account.</p>
+          <div className="hero-cta reveal">
+            <Link className="btn btn-primary" href="/login">
               Get started
             </Link>
-            <Link href="/login" className="rounded-full border border-line bg-panel px-5 py-3 text-base text-fg hover:border-muted">
+            <Link className="btn btn-glass" href="/login">
               Sign in
             </Link>
           </div>
-          <footer className="mt-16 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6 text-left text-xs text-dim">
+
+          <div className="footer">
             <Brand />
-            <span>Built at SpeedHacks, Oct 2026.</span>
-          </footer>
-        </section>
-      </div>
-    </main>
+            <nav aria-label="Footer">
+              <a href="#how">How it works</a>
+              <a href="#ledger">Ledger</a>
+              <Link href="/login">Sign in</Link>
+            </nav>
+            <span className="fine">Built at SpeedHacks, Oct 2026.</span>
+          </div>
+        </div>
+      </footer>
+    </>
   );
 }
 

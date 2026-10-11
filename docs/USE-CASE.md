@@ -14,6 +14,27 @@ code names this scenario family in its system prompt, parses the concrete detail
 request without a model, and writes them into every objective. Nothing below is aspirational:
 each line maps to a function and a test.
 
+## Research first, then permission, then the calls
+
+The calls are the last five minutes of the job. The hours are in finding who to call: which movers
+serve the route on October 25, which internet providers cover the new address and what their
+current promotions and student rates are, which dentist near campus takes new patients and the
+student's insurance, what each one's real phone number is, and what the rules are (notice periods,
+early-termination fees, deposit caps). That is what the product does first. Onboarding captures
+everything about the user (both addresses, the move date, bedrooms, household size, current
+providers and contract ends, insurance, student proof, budget ceiling, availability, caller name).
+`POST /api/py/research` then runs the research engine (`research/engine.py`) over that profile, the
+request and the roster: it finds the options, the plans, the discounts, prepares a strategy for
+securing each one and validates the regulations, and every item carries citations; a phone number
+is kept only when it appeared in a fetched source. The result is stored as a proposal
+(`proposals` table, `docs/CONTRACT.md` "Proposals") and shown to the user, who picks the items to
+execute. `POST /api/py/proposals/{id}/approve` turns the approved items into vendor rows and a run
+through the same path as before, so the honesty constraints hold unchanged: only vendor rows are
+dialable, the opener and the one-sentence AI line still start every call, and an approved external
+number is dialed only when `ALLOW_EXTERNAL_CALLS` is set (otherwise its row runs as a labeled
+simulated row with the note "approved, not dialed: external calling disabled"). `POST /api/py/runs`
+stays as the skip-research path for a roster the user already trusts.
+
 ## The fan-out
 
 | Track | Vendor | What the agent asks for | Student ask |

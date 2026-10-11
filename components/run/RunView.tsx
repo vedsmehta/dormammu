@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { summarizeOutcome } from "@/components/calls/summary";
 import { CallRow } from "@/components/run/CallRow";
 import { RunFooter } from "@/components/run/RunFooter";
 import { RunLedgerAside } from "@/components/run/RunLedgerAside";
 import { RunResults } from "@/components/run/RunResults";
-import { Chip, Dot, ErrorNote, StatusChip } from "@/components/ui";
+import { AppShell } from "@/components/shell";
+import { ErrorNote, StatusChip, Tag } from "@/components/ui";
 import { ApiError, getRun, tickRun } from "@/lib/api";
 import { fmtDuration, parseTs } from "@/lib/format";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
@@ -20,6 +21,8 @@ const CLOCK_MS = 250;
 const MAX_TICKS = 900;
 
 type RealtimeState = "off" | "connecting" | "live" | "error";
+
+const d = (s: string) => ({ "--d": s }) as CSSProperties;
 
 function describe(e: unknown): string {
   if (e instanceof ApiError) return e.status === 404 ? "Run not found (404)." : e.message;
@@ -185,146 +188,144 @@ export function RunView({ runId }: { runId: string }) {
   const mult = run?.aggregate?.multiplier ?? null;
   const groups = groupByTrack(calls);
 
-  return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <Link href="/" className="font-mono text-xs text-dim hover:text-fg">
-          ← dashboard
+  const realtimeTitle =
+    realtime === "off" ? "Supabase not configured; polling only" : `Realtime ${realtime}; polling every ${TICK_MS / 1000}s regardless`;
+
+  const head = (
+    <div className="pulse">
+      {active && run ? (
+        <div className="rings" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+      ) : null}
+      <div className="pulse-top rise">
+        <Link className="back" href="/">
+          ← Dashboard
         </Link>
         {run ? (
-          <div className="flex items-center gap-2">
-            <StatusChip status={run.status} />
-            <Chip
-              tone={realtime === "live" ? "ok" : realtime === "error" ? "bad" : "muted"}
-              title={
-                realtime === "off"
-                  ? "Supabase not configured; polling only"
-                  : `Realtime ${realtime}; polling every ${TICK_MS / 1000}s regardless`
-              }
-            >
+          <span className="tags">
+            <StatusChip status={run.status} first />
+            <Tag tone={realtime === "live" ? "mint" : "line"} title={realtimeTitle} first>
               {realtime === "live" ? "live" : realtime === "off" ? "polling" : realtime}
-            </Chip>
-          </div>
+            </Tag>
+          </span>
         ) : null}
       </div>
 
-      {error ? (
-        <div className="space-y-3">
-          <ErrorNote message={error} />
-          <Link href="/" className="text-sm text-accent hover:underline">
-            back to the dashboard
-          </Link>
-        </div>
-      ) : null}
-
-      {!run && !error ? <p className="font-mono text-sm text-dim">loading run…</p> : null}
+      {error ? <ErrorNote message={error} /> : null}
+      {!run && !error ? <p className="sub">Loading run…</p> : null}
 
       {run ? (
         <>
-          <header className="animate-rise py-6 text-center sm:py-10">
-            <q className="inline-block max-w-3xl rounded-full border border-line bg-panel px-5 py-2 text-sm text-muted sm:text-base">
-              {run.request}
-            </q>
-            <p className="tnum mt-5 flex items-center justify-center gap-4 font-display text-6xl font-semibold tracking-tight sm:text-8xl">
-              {active ? <Dot state="talking" className="h-4 w-4" /> : null}
-              {fmtDuration(wall)}
-            </p>
-            <p className="mt-2 text-muted">
-              {calls.length === 0
-                ? active
-                  ? "Planning the calls…"
-                  : "This run produced no calls"
-                : active
-                  ? `${calls.length - finished} of ${calls.length} ${calls.length === 1 ? "call" : "calls"} in progress at the same time`
-                  : `${calls.length} ${calls.length === 1 ? "call" : "calls"}, all finished`}
-            </p>
-            <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 divide-y divide-line rounded-2xl border border-line bg-panel sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-              {active ? (
-                <>
-                  <div className="p-3">
-                    <span className="block text-xs text-muted">Connected</span>
-                    <b className="tnum block font-display text-xl font-semibold">
-                      {connected} of {calls.length}
-                    </b>
-                  </div>
-                  <div className="p-3">
-                    <span className="block text-xs text-muted">Finished</span>
-                    <b className="tnum block font-display text-xl font-semibold">
-                      {finished} of {calls.length}
-                      {failed ? <span className="ml-1 text-sm font-normal text-bad">({failed} failed)</span> : null}
-                    </b>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="p-3">
-                    <span className="block text-xs text-muted">Than one at a time</span>
-                    <b className={`tnum block font-display text-xl font-semibold ${mult !== null ? "text-ok" : "text-dim"}`}>
-                      {mult !== null ? `${mult.toFixed(1)}× faster (est.)` : "no estimate"}
-                    </b>
-                  </div>
-                  <div className="p-3">
-                    <span className="block text-xs text-muted">Finished</span>
-                    <b className="tnum block font-display text-xl font-semibold">
-                      {finished - failed} of {calls.length}
-                      {failed ? <span className="ml-1 text-sm font-normal text-bad">({failed} failed)</span> : null}
-                    </b>
-                  </div>
-                </>
-              )}
-              <div className="p-3">
-                <span className="block text-xs text-muted">
-                  {bestQuote ? (active ? "Best quote so far" : "Best quote") : firstSlot ? "Appointment" : "Best quote"}
-                </span>
-                <b className="tnum block truncate font-display text-xl font-semibold">
-                  {bestQuote ? summarizeOutcome(bestQuote).main : firstSlot ? summarizeOutcome(firstSlot).main : <span className="text-dim">none yet</span>}
-                </b>
-              </div>
-            </div>
-          </header>
-
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
-            <section className="overflow-hidden rounded-2xl border border-line bg-panel">
-              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-                <h2 className="font-mono text-xs uppercase tracking-widest text-teal">{active ? "This run" : "Results"}</h2>
-                <div className="tnum flex flex-wrap items-center gap-x-2 font-mono text-xs text-muted">
-                  <span className={connected > 0 ? "text-ok" : ""}>{connected} connected</span>
-                  <span className="text-dim">·</span>
-                  <span className={failed > 0 ? "text-bad" : ""}>{failed} failed</span>
-                  {active ? <span className="animate-blink text-ok">▮</span> : null}
+          <p className="glass-pill rise" style={d(".1s")}>
+            “{run.request}”
+          </p>
+          <p className="live num rise" style={d(".2s")}>
+            {active ? <span className="dot talking" aria-hidden="true" /> : null}
+            {fmtDuration(wall)}
+          </p>
+          <p className="sub rise" style={d(".3s")}>
+            {calls.length === 0
+              ? active
+                ? "Planning the calls…"
+                : "This run produced no calls"
+              : active
+                ? `${calls.length - finished} of ${calls.length} ${calls.length === 1 ? "call" : "calls"} in progress at the same time`
+                : `${calls.length} ${calls.length === 1 ? "call" : "calls"}, all finished`}
+          </p>
+          <div className="strip rise" style={d(".4s")}>
+            {active ? (
+              <>
+                <div>
+                  <span>Connected</span>
+                  <b className="num">
+                    {connected} of {calls.length}
+                  </b>
                 </div>
-              </header>
-
-              {!active && run.aggregate ? <RunResults aggregate={run.aggregate} wallSeconds={wall} /> : null}
-
-              {calls.length === 0 ? (
-                <p className="px-4 py-6 font-mono text-sm text-dim">
-                  {active ? "no calls planned yet…" : "this run produced no calls"}
-                </p>
-              ) : (
-                groups.map(([track, rows]) => (
-                  <div key={track}>
-                    <h3 className="border-b border-line bg-panel-2 px-4 py-1.5 font-mono text-[11px] uppercase tracking-widest text-dim">
-                      {trackLabel(track)}
-                    </h3>
-                    <ol className="divide-y divide-line">
-                      {rows.map((call) => (
-                        <CallRow key={call.id} call={call} serverNow={serverNow} best={bestIds.has(call.id)} />
-                      ))}
-                    </ol>
-                  </div>
-                ))
-              )}
-
-              <RunFooter aggregate={run.aggregate} wallSeconds={wall} active={active} nCalls={calls.length} />
-            </section>
-
-            <RunLedgerAside run={run} active={active} />
+                <div>
+                  <span>Finished</span>
+                  <b className="num">
+                    {finished} of {calls.length}
+                    {failed ? <i> ({failed} failed)</i> : null}
+                  </b>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span>Than one at a time</span>
+                  <b className={mult !== null ? "num" : "num t-muted"}>{mult !== null ? `${mult.toFixed(1)}× faster (est.)` : "no estimate"}</b>
+                </div>
+                <div>
+                  <span>Finished</span>
+                  <b className="num">
+                    {finished - failed} of {calls.length}
+                    {failed ? <i> ({failed} failed)</i> : null}
+                  </b>
+                </div>
+              </>
+            )}
+            <div>
+              <span>{bestQuote ? (active ? "Best quote so far" : "Best quote") : firstSlot ? "Appointment" : "Best quote"}</span>
+              <b className={bestQuote || firstSlot ? "num" : "num t-muted"}>
+                {bestQuote ? summarizeOutcome(bestQuote).main : firstSlot ? summarizeOutcome(firstSlot).main : "none yet"}
+              </b>
+            </div>
           </div>
         </>
       ) : null}
+    </div>
+  );
 
-      {tickError ? <p className="mt-3 font-mono text-xs text-warn">tick: {tickError}</p> : null}
-    </main>
+  return (
+    <AppShell head={head}>
+      {run ? (
+        <div className="dash" style={{ paddingTop: 0 }}>
+          <section aria-labelledby="run-h">
+            <h2 id="run-h">{active ? "This run" : "Results"}</h2>
+            <p>
+              <span className={connected > 0 ? "t-talking" : undefined}>{connected} connected</span> ·{" "}
+              <span className={failed > 0 ? "t-warn" : undefined}>{failed} failed</span>
+            </p>
+
+            {!active && run.aggregate ? (
+              <div className="group">
+                <RunResults aggregate={run.aggregate} wallSeconds={wall} />
+              </div>
+            ) : null}
+
+            {calls.length === 0 ? (
+              <p className="dash-note">{active ? "No calls planned yet…" : "This run produced no calls."}</p>
+            ) : (
+              groups.map(([track, rows]) => (
+                <div key={track} className="group">
+                  <h3>{trackLabel(track)}</h3>
+                  <ol>
+                    {rows.map((call, i) => (
+                      <CallRow key={call.id} call={call} serverNow={serverNow} best={bestIds.has(call.id)} index={i} />
+                    ))}
+                  </ol>
+                </div>
+              ))
+            )}
+
+            <RunFooter aggregate={run.aggregate} wallSeconds={wall} active={active} nCalls={calls.length} />
+            {tickError ? <p className="note warn">tick: {tickError}</p> : null}
+          </section>
+
+          <RunLedgerAside run={run} active={active} />
+        </div>
+      ) : error ? (
+        <p>
+          <Link className="more" href="/" style={{ marginTop: 0 }}>
+            Back to the dashboard
+          </Link>
+        </p>
+      ) : (
+        <p className="dash-note">Loading run…</p>
+      )}
+    </AppShell>
   );
 }

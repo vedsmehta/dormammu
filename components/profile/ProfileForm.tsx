@@ -2,25 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import { fromSlots, toSlots, type Slot } from "@/components/profile/availability";
 import { AvailabilityEditor } from "@/components/profile/AvailabilityEditor";
-import { Button, ErrorNote, Field, inputClass, Loading } from "@/components/ui";
+import { AppShell } from "@/components/shell";
+import { Button, ErrorNote, Field, Loading } from "@/components/ui";
 import { getProfile, upsertProfile } from "@/lib/api";
 import { describeError, fmtDay, initials, maskPhone } from "@/lib/format";
 import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
 import { COHORTS, DEFAULT_CALLER_NAME, type Prefs, type Profile } from "@/lib/types";
 
+const d = (s: string) => ({ "--d": s }) as CSSProperties;
+
 /** A two-column section from profile.html: heading and lede on the left, the fields on the right. */
 function Section({ title, lede, children }: { title: string; lede?: string; children: React.ReactNode }) {
   return (
-    <section className="grid gap-5 border-t border-line py-8 first:border-t-0 first:pt-0 md:grid-cols-[1fr_2fr] md:gap-10">
+    <section className="psec">
       <div>
-        <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">{title}</h2>
-        {lede ? <p className="mt-2 max-w-xs text-sm text-muted">{lede}</p> : null}
+        <h2>{title}</h2>
+        {lede ? <p>{lede}</p> : null}
       </div>
-      <div className="space-y-5">{children}</div>
+      <div>{children}</div>
     </section>
   );
 }
@@ -121,58 +124,54 @@ export function ProfileForm() {
   const cohortCfg = COHORTS.find((c) => c.key === cohort) ?? COHORTS[0];
   const headName = displayName.trim() || profile?.display_name || "Your profile";
 
-  return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-      <header className="animate-rise flex items-center gap-5 py-6 sm:gap-7 sm:py-10">
-        <span
-          className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-mint font-display text-2xl font-semibold text-bg sm:h-28 sm:w-28 sm:text-4xl"
-          aria-hidden="true"
-        >
-          {initials(displayName || profile?.display_name, email)}
-        </span>
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-3xl font-semibold tracking-tight sm:text-5xl">{headName}</h1>
-          <p className="mt-2 text-sm text-muted sm:text-base">
-            {cohortCfg.label}
-            {profile?.created_at ? ` · member since ${fmtDay(profile.created_at.slice(0, 10))}` : ""}
-            {phone ? ` · ${maskPhone(phone)}` : ""}
-          </p>
-        </div>
-      </header>
+  const head = (
+    <div className="who-head">
+      <span className="face rise" aria-hidden="true">
+        {initials(displayName || profile?.display_name, email)}
+      </span>
+      <div>
+        <h1 className="rise" style={d(".1s")}>
+          {headName}
+        </h1>
+        <p className="rise" style={d(".2s")}>
+          {cohortCfg.label}
+          {profile?.created_at ? ` · member since ${fmtDay(profile.created_at.slice(0, 10))}` : ""}
+          {phone ? ` · ${maskPhone(phone)}` : ""}
+        </p>
+      </div>
+    </div>
+  );
 
+  return (
+    <AppShell head={head}>
       <ErrorNote message={loadError} />
-      {!profile && !loadError ? <Loading>loading profile…</Loading> : null}
+      {!profile && !loadError ? <Loading>Loading profile…</Loading> : null}
 
       <form onSubmit={save}>
         <Section title="About you" lede="Who the agent says it is calling for.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="name">
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputClass} autoComplete="name" />
+          <div className="fields-2">
+            <Field label="Name">
+              <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" />
             </Field>
-            <Field label="mobile" hint="For transfers and callbacks. Shown masked everywhere else.">
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 415 555 0100"
-                autoComplete="tel"
-                className={`${inputClass} font-mono`}
-              />
+            <Field label="Mobile" hint="For transfers and callbacks. Shown masked everywhere else.">
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 415 555 0100" autoComplete="tel" />
             </Field>
           </div>
           {email ? (
-            <p className="text-sm text-muted">
-              <span className="font-mono text-[11px] uppercase tracking-wide text-dim">email · </span>
-              {email}
-            </p>
+            <dl className="facts" style={{ marginTop: 18 }}>
+              <div>
+                <dt>Email</dt>
+                <dd>
+                  {email} <span className="verified">Signed in</span>
+                </dd>
+              </div>
+            </dl>
           ) : null}
         </Section>
 
-        <Section
-          title="Eligibility"
-          lede="The agent only claims what is true about you. This is exactly what it is told to ask for."
-        >
-          <Field label="profile" hint="Only the student cohort ships today. More are config, not code, on the Python side.">
-            <select value={cohort} onChange={(e) => setCohort(e.target.value)} className={inputClass}>
+        <Section title="Eligibility" lede="The agent only claims what is true about you. This is exactly what it is told to ask for.">
+          <Field label="Profile" hint="Only the student cohort ships today. More are config, not code, on the Python side.">
+            <select value={cohort} onChange={(e) => setCohort(e.target.value)}>
               {COHORTS.map((c) => (
                 <option key={c.key} value={c.key}>
                   {c.label}
@@ -181,124 +180,99 @@ export function ProfileForm() {
               {!COHORTS.some((c) => c.key === cohort) ? <option value={cohort}>{cohort} (unknown, treated as student)</option> : null}
             </select>
           </Field>
-          <div>
-            <p className="text-sm text-muted">Asked for on every call</p>
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {cohortCfg.asks.map((a) => (
-                <li key={a} className="rounded-full border border-teal/50 px-3 py-1.5 text-sm">
-                  {a}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-dim">Proof vendors may want: {cohortCfg.proof}.</p>
-          </div>
+          <p className="rules-h">Asked for on every call</p>
+          <ul className="asks">
+            {cohortCfg.asks.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+          <p className="hint" style={{ marginTop: 12, fontSize: 14, color: "var(--ink-2)" }}>
+            Proof vendors may want: {cohortCfg.proof}.
+          </p>
         </Section>
 
         <Section title="On the phone" lede="How the agent introduces itself, and the limit it works within.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
-              <input
-                value={callerName}
-                onChange={(e) => setCallerName(e.target.value)}
-                placeholder={DEFAULT_CALLER_NAME}
-                className={inputClass}
-              />
+          <div className="fields-2">
+            <Field label="Name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
+              <input type="text" value={callerName} onChange={(e) => setCallerName(e.target.value)} placeholder={DEFAULT_CALLER_NAME} />
             </Field>
-            <Field label="budget ceiling (usd)" hint="The agent brings anything above this back to you instead of accepting.">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                placeholder="900"
-                className={`${inputClass} tnum font-mono`}
-              />
+            <Field label="Budget ceiling (USD)" hint="The agent brings anything above this back to you instead of accepting.">
+              <input type="number" min={0} step={1} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="900" className="num" />
             </Field>
           </div>
         </Section>
 
         <Section title="Availability" lede="Used when booking appointments by phone.">
-          <div>
-            <span className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted">preferred times</span>
-            <div className="flex gap-2">
-              <input
-                value={timeDraft}
-                onChange={(e) => setTimeDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTime();
-                  }
-                }}
-                placeholder="weekday afternoons"
-                className={inputClass}
-              />
-              <Button variant="ghost" onClick={addTime} disabled={!timeDraft.trim()}>
-                Add
-              </Button>
-            </div>
-            {times.length ? (
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {times.map((t) => (
-                  <li key={t} className="flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-sm">
-                    {t}
-                    <button
-                      type="button"
-                      onClick={() => setTimes(times.filter((x) => x !== t))}
-                      className="ml-1 text-dim hover:text-bad"
-                      aria-label={`remove ${t}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-xs text-dim">Free text the agent can read out, like &ldquo;weekday afternoons&rdquo;.</p>
-            )}
-          </div>
+          <Field label="Preferred times" hint="Free text the agent can read out, like “weekday afternoons”. Press Enter to add.">
+            <input
+              type="text"
+              value={timeDraft}
+              onChange={(e) => setTimeDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addTime();
+                }
+              }}
+              placeholder="weekday afternoons"
+            />
+          </Field>
+          {times.length ? (
+            <ul className="asks" style={{ marginTop: 14 }}>
+              {times.map((t) => (
+                <li key={t}>
+                  {t}
+                  <button type="button" className="rm" style={{ marginLeft: 8, padding: 0 }} onClick={() => setTimes(times.filter((x) => x !== t))} aria-label={`remove ${t}`}>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <AvailabilityEditor slots={slots} onChange={setSlots} />
         </Section>
 
         <Section title="Account">
-          <ul className="divide-y divide-line text-sm">
-            <li className="flex items-center justify-between py-2">
-              <span className="text-muted">Calls</span>
-              <Link href="/calls" className="text-teal underline underline-offset-4 hover:text-fg">
-                See calls
-              </Link>
-            </li>
-            <li className="flex items-center justify-between py-2">
-              <span className="text-muted">Ledger</span>
-              <Link href="/ledger" className="text-teal underline underline-offset-4 hover:text-fg">
-                Open ledger
-              </Link>
-            </li>
-            <li className="flex items-center justify-between py-2">
-              <span className="text-muted">Roster</span>
-              <Link href="/onboarding" className="text-teal underline underline-offset-4 hover:text-fg">
-                Edit vendors
-              </Link>
-            </li>
-          </ul>
+          <dl className="facts">
+            <div>
+              <dt>Calls</dt>
+              <dd>
+                <span>Everything it has called</span>
+                <Link href="/calls">See calls</Link>
+              </dd>
+            </div>
+            <div>
+              <dt>Ledger</dt>
+              <dd>
+                <span>Dated facts from the calls</span>
+                <Link href="/ledger">Open ledger</Link>
+              </dd>
+            </div>
+            <div>
+              <dt>Roster</dt>
+              <dd>
+                <span>Who it may call</span>
+                <Link href="/onboarding">Edit vendors</Link>
+              </dd>
+            </div>
+          </dl>
           {isSupabaseConfigured() ? (
-            <Button variant="ghost" onClick={signOut}>
+            <Button variant="line" size="sm" onClick={signOut} className="signout">
               Sign out
             </Button>
           ) : (
-            <p className="font-mono text-xs text-warn">dev mode · no auth · the Python side uses DEV_USER_ID</p>
+            <p className="dash-note">dev mode · no auth · the Python side uses DEV_USER_ID</p>
           )}
         </Section>
 
-        <div className="sticky bottom-0 -mx-4 mt-2 flex flex-wrap items-center gap-3 border-t border-line bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-          <Button type="submit" disabled={busy || !profile} variant="mint">
-            {busy ? "saving…" : "Save profile"}
+        <div className="savebar">
+          <Button type="submit" disabled={busy || !profile} size="sm">
+            {busy ? "Saving…" : "Save profile"}
           </Button>
-          {savedAt ? <span className="font-mono text-xs text-ok">saved at {savedAt}</span> : null}
+          {savedAt ? <span className="saved-at">Saved at {savedAt}</span> : null}
           <ErrorNote message={error} />
         </div>
       </form>
-    </main>
+    </AppShell>
   );
 }

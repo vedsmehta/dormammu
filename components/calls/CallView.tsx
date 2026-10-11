@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { summarizeOutcome, TONE_CLASS } from "@/components/calls/summary";
-import { Chip, Dot, ErrorNote, Loading, PageHeader, stateWord, Wave } from "@/components/ui";
+import { summarizeOutcome } from "@/components/calls/summary";
+import { AppShell, PageTitle } from "@/components/shell";
+import { Dot, ErrorNote, Loading, stateWord, Tag, Wave } from "@/components/ui";
 import { getLedger, getRecentRuns, getRun, tickRun } from "@/lib/api";
 import { describeError, EM, fmtDay, fmtDuration, fmtSlot, fmtStampFull, fmtUsd, maskPhone, parseTs } from "@/lib/format";
 import { isTerminal, trackLabel, type AssembledRun, type Call, type LedgerRow } from "@/lib/types";
 
 const TICK_MS = 2000;
 const SCAN_RUNS = 20;
+
+const d = (s: string) => ({ "--d": s }) as CSSProperties;
 
 function elapsedFor(call: Call, run: AssembledRun): number | null {
   if (call.state === "planned") return 0;
@@ -28,7 +31,7 @@ function OutcomeFacts({ call }: { call: Call }) {
   const o = call.outcome;
   if (!o) {
     return (
-      <p className="mt-3 text-sm text-muted">
+      <p>
         {call.state === "failed"
           ? `Nothing. ${call.termination_type ?? call.error ?? "The call did not produce an outcome."}`
           : isTerminal(call.state)
@@ -51,11 +54,11 @@ function OutcomeFacts({ call }: { call: Call }) {
   }
   if (o.note) rows.push(["Note", o.note]);
   return (
-    <dl className="mt-3 divide-y divide-line">
+    <dl className="facts">
       {rows.map(([k, v]) => (
-        <div key={k} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 py-2 text-sm">
-          <dt className="text-muted">{k}</dt>
-          <dd className="break-words font-medium">{v}</dd>
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
         </div>
       ))}
     </dl>
@@ -135,31 +138,12 @@ export function CallView({ callId, runId }: { callId: string; runId: string | nu
     };
   }, [callKey, active]);
 
-  if (error) {
+  if (error || !run || !call) {
+    const message = error ?? (run && !call ? `No call ${callId} in run ${run.id}.` : null);
     return (
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-        <ErrorNote message={error} />
-        <Link href="/calls" className="mt-3 inline-block text-sm text-accent hover:underline">
-          back to calls
-        </Link>
-      </main>
-    );
-  }
-  if (!run) {
-    return (
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-        <Loading>loading call…</Loading>
-      </main>
-    );
-  }
-  if (!call) {
-    return (
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-        <ErrorNote message={`No call ${callId} in run ${run.id}.`} />
-        <Link href={`/runs/${run.id}`} className="mt-3 inline-block text-sm text-accent hover:underline">
-          open the run
-        </Link>
-      </main>
+      <AppShell head={<PageTitle back={{ href: run ? `/runs/${run.id}` : "/calls", label: run ? "Open the run" : "Back to calls" }} title={message ? "Call" : "Loading call…"} />}>
+        {message ? <ErrorNote message={message} /> : <Loading>Loading call…</Loading>}
+      </AppShell>
     );
   }
 
@@ -167,126 +151,124 @@ export function CallView({ callId, runId }: { callId: string; runId: string | nu
   const elapsed = elapsedFor(call, run);
   const turns = Array.isArray(call.transcript_turns) ? call.transcript_turns : null;
   const mine = (ledger ?? []).filter((r) => r.source_call === call.id);
+  const tone = s.tone === "ok" ? "t-talking" : s.tone === "warn" || s.tone === "bad" ? "t-ringing" : s.tone === "muted" ? "t-muted" : "";
+
+  const head = (
+    <PageTitle back={{ href: `/runs/${run.id}`, label: run.request.length > 60 ? run.request.slice(0, 57) + "…" : run.request }} title={call.target_name}>
+      <p className={`outcome num rise ${tone}`.trim()} style={d(".2s")}>
+        {s.main}
+        {call.state === "talking" ? <Wave /> : null}
+        {s.sub ? <small>{s.sub}</small> : null}
+      </p>
+      <p className="meta rise" style={d(".3s")}>
+        <Dot state={call.state} />
+        <span>{stateWord(call.state)}</span>
+        <span>·</span>
+        <span>{trackLabel(call.track)}</span>
+        <span>·</span>
+        <span>{fmtStampFull(call.started_at)}</span>
+        <span>·</span>
+        <span className="num">{fmtDuration(elapsed)}</span>
+        <span>·</span>
+        <span className="num">{maskPhone(call.target_phone)}</span>
+        {call.simulated ? (
+          <Tag tone="warn" first title="Simulated: this row ran on the scripted timeline, not a live Dial call">
+            Simulated
+          </Tag>
+        ) : null}
+        {call.termination_type ? (
+          <Tag tone="line" first>
+            {call.termination_type}
+          </Tag>
+        ) : null}
+      </p>
+    </PageTitle>
+  );
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-      <PageHeader
-        back={{ href: `/runs/${run.id}`, label: run.request.length > 60 ? run.request.slice(0, 57) + "…" : run.request }}
-        title={call.target_name}
-      >
-        <p className={`tnum mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 font-display text-4xl font-semibold tracking-tight sm:text-6xl ${TONE_CLASS[s.tone]}`}>
-          {s.main}
-          {call.state === "talking" ? <Wave /> : null}
-          {s.sub ? <small className="font-sans text-base font-normal text-muted">{s.sub}</small> : null}
-        </p>
-        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-          <Dot state={call.state} />
-          <span>{stateWord(call.state)}</span>
-          <span className="text-dim">·</span>
-          <span>{trackLabel(call.track)}</span>
-          <span className="text-dim">·</span>
-          <span>{fmtStampFull(call.started_at)}</span>
-          <span className="text-dim">·</span>
-          <span className="tnum font-mono">{fmtDuration(elapsed)}</span>
-          <span className="text-dim">·</span>
-          <span className="tnum font-mono">{maskPhone(call.target_phone)}</span>
-          {call.simulated ? (
-            <Chip tone="warn" title="Simulated: this row ran on the scripted timeline, not a live Dial call">
-              simulated
-            </Chip>
-          ) : null}
-          {call.termination_type ? <Chip tone="muted">{call.termination_type}</Chip> : null}
-        </p>
-      </PageHeader>
-
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+    <AppShell head={head}>
+      <div className="call-grid">
         <section aria-labelledby="said-h">
-          <h2 id="said-h" className="font-mono text-xs uppercase tracking-widest text-teal">
+          <h2 className="eyebrow" id="said-h">
             What was said
           </h2>
           {turns && turns.length ? (
-            <ol className="mt-3 divide-y divide-line">
+            <ol className="transcript no-time">
               {turns.map((t, i) => {
                 const agent = /agent|assistant|ai/i.test(t.speaker);
                 return (
-                  <li key={i} className="grid grid-cols-[4rem_minmax(0,1fr)] gap-3 py-3 text-sm">
-                    <span className="pt-0.5 font-mono text-[11px] uppercase tracking-wide text-dim">{t.speaker}</span>
-                    <p className={agent ? "text-fg" : "text-muted"}>{t.text}</p>
+                  <li key={i} className={agent ? "agent" : "rep"}>
+                    <span className="sp">{t.speaker}</span>
+                    <p>{t.text}</p>
                   </li>
                 );
               })}
             </ol>
           ) : call.transcript ? (
-            <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-muted">{call.transcript}</pre>
+            <div className="transcript">
+              <pre>{call.transcript}</pre>
+            </div>
           ) : (
-            <p className="mt-3 text-sm text-muted">
-              {active ? "The transcript arrives when the call ends." : "No transcript was recorded for this call."}
-            </p>
+            <p className="dash-note">{active ? "The transcript arrives when the call ends." : "No transcript was recorded for this call."}</p>
           )}
           {active ? (
-            <p className="mt-4 font-mono text-[11px] text-dim">
+            <p className="dash-note">
               Live: refreshing every {TICK_MS / 1000}s.{tickError ? ` tick: ${tickError}` : ""}
             </p>
           ) : null}
         </section>
 
-        <aside className="space-y-8">
-          <section aria-labelledby="back-h">
-            <h2 id="back-h" className="font-mono text-xs uppercase tracking-widest text-teal">
-              What came back
-            </h2>
+        <aside className="side">
+          <section className="sec" aria-labelledby="back-h">
+            <h2 id="back-h">What came back</h2>
             <OutcomeFacts call={call} />
           </section>
 
-          <section aria-labelledby="told-h">
-            <h2 id="told-h" className="font-mono text-xs uppercase tracking-widest text-teal">
-              What the agent was told
-            </h2>
-            <p className="mt-3 text-sm text-fg">{call.objective || EM}</p>
+          <section className="sec" aria-labelledby="told-h">
+            <h2 id="told-h">What the agent was told</h2>
+            <p className="said">{call.objective || EM}</p>
             {call.prior_context ? (
-              <p className="mt-2 text-sm text-muted">
-                <span className="font-mono text-[11px] uppercase tracking-wide text-dim">prior context · </span>
+              <p>
+                <span className="t-muted">Prior context · </span>
                 {call.prior_context}
               </p>
             ) : null}
-            {call.vendor_key ? <p className="mt-2 font-mono text-[11px] text-dim">vendor key {call.vendor_key}</p> : null}
+            {call.vendor_key ? <p className="dash-note">vendor key {call.vendor_key}</p> : null}
           </section>
 
-          <section aria-labelledby="ledger-h">
-            <h2 id="ledger-h" className="font-mono text-xs uppercase tracking-widest text-teal">
-              In your ledger
-            </h2>
+          <section className="sec" aria-labelledby="ledger-h">
+            <h2 id="ledger-h">In your ledger</h2>
             {ledger === null ? (
-              <div className="mt-3">
-                <Loading />
-              </div>
+              <Loading />
             ) : mine.length === 0 ? (
-              <p className="mt-3 text-sm text-muted">
+              <p>
                 Nothing from this call yet. Dated facts land in the{" "}
-                <Link href="/ledger" className="text-accent hover:underline">
+                <Link className="edit" href="/ledger">
                   ledger
                 </Link>{" "}
                 as calls finish.
               </p>
             ) : (
-              <ul className="mt-3 divide-y divide-line">
+              <dl className="facts">
                 {mine.map((r) => (
-                  <li key={r.id} className="py-2 text-sm">
-                    <span className="flex items-center gap-2">
-                      <Chip tone="muted">{r.kind.replace("_", " ")}</Chip>
-                      <b className="font-medium">{r.label}</b>
-                    </span>
-                    <span className="mt-1 block font-mono text-xs text-muted">
-                      {r.amount_usd !== null ? `${fmtUsd(r.amount_usd)} · ` : ""}
-                      {r.expires_on ? `until ${fmtDay(r.expires_on)}` : r.effective_on ? `from ${fmtDay(r.effective_on)}` : "undated"}
-                    </span>
-                  </li>
+                  <div key={r.id}>
+                    <dt>{r.kind.replace("_", " ")}</dt>
+                    <dd>
+                      <span>
+                        {r.label}
+                        <small className="verified" style={{ display: "block", marginTop: 4 }}>
+                          {r.amount_usd !== null ? `${fmtUsd(r.amount_usd)} · ` : ""}
+                          {r.expires_on ? `until ${fmtDay(r.expires_on)}` : r.effective_on ? `from ${fmtDay(r.effective_on)}` : "undated"}
+                        </small>
+                      </span>
+                    </dd>
+                  </div>
                 ))}
-              </ul>
+              </dl>
             )}
           </section>
         </aside>
       </div>
-    </main>
+    </AppShell>
   );
 }

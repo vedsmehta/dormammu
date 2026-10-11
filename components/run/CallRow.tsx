@@ -1,10 +1,11 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { callHref } from "@/components/calls/summary";
 import { OutcomeCell } from "@/components/run/OutcomeCell";
-import { StateMeter, StateWord } from "@/components/run/StateMeter";
+import { StateWord } from "@/components/run/StateMeter";
 import { Transcript } from "@/components/run/Transcript";
-import { Chip } from "@/components/ui";
+import { Dot, Tag } from "@/components/ui";
 import { fmtDuration, maskPhone, parseTs } from "@/lib/format";
 import { isTerminal, type Call } from "@/lib/types";
 
@@ -20,62 +21,34 @@ function elapsedFor(call: Call, serverNow: number | null): number | null {
   return Math.max(0, (serverNow - start) / 1000);
 }
 
-export function CallRow({ call, serverNow, best }: { call: Call; serverNow: number | null; best: boolean }) {
+/** One .row of the live board (run.html): dot, vendor, state, clock, result. */
+export function CallRow({ call, serverNow, best, index }: { call: Call; serverNow: number | null; best: boolean; index: number }) {
   const elapsed = elapsedFor(call, serverNow);
   const failed = call.state === "failed";
-  const talking = call.state === "talking";
-  const ringing = call.state === "ringing";
-
-  const rowTone = failed
-    ? "border-l-4 border-l-bad/40 text-muted"
-    : talking
-      ? "border-l-4 border-l-ok bg-ok/10 animate-row-in"
-      : ringing
-        ? "border-l-4 border-l-warn/70"
-        : "border-l-4 border-l-transparent";
 
   return (
-    <li id={`call-${call.id}`} className={`px-4 py-3 transition-colors duration-500 ${rowTone}`}>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,11rem)_auto_8.5rem_3.5rem_minmax(0,1fr)_auto]">
-        <div className="min-w-0">
-          <Link
-            href={callHref(call)}
-            className={`block truncate font-display text-base font-semibold tracking-tight hover:text-mint ${failed ? "text-bad/80" : "text-fg"}`}
-            title="Open this call"
-          >
-            {call.target_name}
-          </Link>
-          <div className="tnum truncate font-mono text-[11px] text-dim">
-            {maskPhone(call.target_phone)}
-            <span className="mx-1">·</span>
-            {call.track}
-          </div>
-        </div>
-
-        <div className="justify-self-end md:justify-self-start">
-          <StateMeter state={call.state} />
-        </div>
-
-        <div className="text-sm">
-          <StateWord call={call} />
-        </div>
-
-        <div className={`tnum font-mono text-sm ${failed ? "text-bad/70" : talking ? "text-ok" : "text-fg"}`}>
-          {fmtDuration(elapsed)}
-        </div>
-
-        <div className="col-span-2 min-w-0 md:col-span-1">
-          <OutcomeCell call={call} best={best} elapsed={elapsed} />
-        </div>
-
-        <div className="col-span-2 flex items-center justify-end gap-2 md:col-span-1">
-          {call.simulated ? (
-            <Chip tone="warn" title="Simulated: this row ran on the scripted timeline, not a live Dial call">
-              simulated
-            </Chip>
-          ) : null}
-        </div>
-      </div>
+    <li id={`call-${call.id}`} className={failed ? "row failed" : "row"} style={{ "--i": index } as CSSProperties}>
+      <Dot state={call.state} />
+      <span className="who">
+        <Link href={callHref(call)} title="Open this call">
+          {call.target_name}
+        </Link>
+        {call.simulated ? (
+          <Tag tone="warn" title="Simulated: this row ran on the scripted timeline, not a live Dial call">
+            Simulated
+          </Tag>
+        ) : null}
+        <small>
+          {maskPhone(call.target_phone)} · {call.track}
+        </small>
+      </span>
+      <span className="state">
+        <StateWord call={call} />
+      </span>
+      <span className={call.state === "talking" ? "time num t-talking" : "time num"}>{fmtDuration(elapsed)}</span>
+      <span className="got">
+        <OutcomeCell call={call} best={best} elapsed={elapsed} />
+      </span>
       {isTerminal(call.state) ? <Transcript call={call} /> : null}
     </li>
   );

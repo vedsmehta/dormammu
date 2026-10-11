@@ -1,9 +1,10 @@
 """Store interface plus the two backends (docs/CONTRACT.md).
 
 SupabaseStore talks PostgREST through supabase-py with the server-only secret key. SqliteStore is a
-stdlib sqlite3 mirror of supabase/migrations/0001_init.sql for tests and no-Supabase dev. Both return
-plain dicts whose keys are the column names; json columns come back parsed, booleans as bool,
-timestamps as ISO-8601 strings with a timezone.
+stdlib sqlite3 mirror of supabase/migrations/0001_init.sql and 0002_proposals.sql for tests and
+no-Supabase dev; it self-migrates an older database file on init (missing vendors columns are added).
+Both return plain dicts whose keys are the column names; json columns come back parsed, booleans as
+bool, timestamps as ISO-8601 strings with a timezone.
 
 One deliberate deviation from the contract text: claim_extraction uses state_rank as the claim token
 (rank 5, between extracting=4 and done=6) instead of `state <> 'extracting'`. ingest maps
@@ -31,8 +32,34 @@ TERMINAL_STATES = ("done", "failed")
 CLAIM_RANK = 5
 
 PROFILE_COLUMNS = ("id", "display_name", "phone", "prefs", "cohort", "created_at")
-VENDOR_COLUMNS = ("id", "owner_id", "key", "name", "track", "phone", "is_demo")
+VENDOR_COLUMNS = ("id", "owner_id", "key", "name", "track", "phone", "is_demo", "source", "website")
+VENDOR_SOURCES = ("manual", "research")
 RUN_COLUMNS = ("id", "user_id", "request", "status", "created_at", "completed_at")
+PROPOSAL_COLUMNS = (
+    "id",
+    "user_id",
+    "request",
+    "status",
+    "proposal",
+    "approved_item_ids",
+    "run_id",
+    "created_at",
+    "updated_at",
+)
+PROPOSAL_STATUSES = ("researching", "proposed", "approved", "dispatched", "rejected", "failed")
+# What update_proposal may change. id, user_id and created_at are fixed; updated_at is set by the store.
+PROPOSAL_UPDATABLE = ("status", "proposal", "approved_item_ids", "run_id")
+# The listing shape (list_proposals): every column but the body, plus n_items.
+PROPOSAL_SUMMARY_COLUMNS = (
+    "id",
+    "user_id",
+    "request",
+    "status",
+    "approved_item_ids",
+    "run_id",
+    "created_at",
+    "updated_at",
+)
 CALL_COLUMNS = (
     "id",
     "run_id",
@@ -75,6 +102,7 @@ JSON_COLUMNS: dict[str, set[str]] = {
     "calls": {"transcript_turns", "outcome"},
     "events": {"data"},
     "plan_cache": {"plans"},
+    "proposals": {"proposal", "approved_item_ids"},
 }
 BOOL_COLUMNS: dict[str, set[str]] = {"vendors": {"is_demo"}, "calls": {"simulated"}}
 DATE_COLUMNS: dict[str, set[str]] = {"ledger": {"effective_on", "expires_on"}}
@@ -96,6 +124,30 @@ def _date_only(value: Any) -> Any:
     if isinstance(value, str) and len(value) > 10:
         return value[:10]
     return value
+
+
+def _proposal_summary(row: dict) -> dict:
+    """A proposals row without its body: PROPOSAL_SUMMARY_COLUMNS plus n_items (len of proposal.items).
+
+    Accepts a full row (sqlite) or a PostgREST row that selected `proposal->items` as `items` (supabase).
+    """
+    if "items" in row:
+        items = row.get("items")
+    else:
+        body = row.get("proposal")
+        items = body.get("items") if isinstance(body, dict) else None
+    out = {k: row.get(k) for k in PROPOSAL_SUMMARY_COLUMNS}
+    out["n_items"] = len(items) if isinstance(items, list) else 0
+    return out
+
+
+def _proposal_update_payload(fields: dict) -> dict:
+    payload = _pick(PROPOSAL_UPDATABLE, fields or {})
+    status = payload.get("status")
+    if status is not None and status not in PROPOSAL_STATUSES:
+        raise ValueError(f"unknown proposal status {status!r}; expected one of {PROPOSAL_STATUSES}")
+    payload["updated_at"] = utcnow_iso()
+    return payload
 
 
 class Store(Protocol):
@@ -135,6 +187,14 @@ class Store(Protocol):
 
     # dial_call_id not null and simulated false, newest first; columns REAL_CALL_COLUMNS
 
+    # Proposals (research-first flow, supabase/migrations/0002_proposals.sql). Rows are PROPOSAL_COLUMNS.
+    def create_proposal(self, user_id: str, request: str, proposal: dict, status: str = "proposed") -> dict: ...
+    def get_proposal(self, proposal_id: str, user_id: str | None = None) -> dict | None: ...
+    def list_proposals(self, user_id: str, limit: int = 20) -> list[dict]: ...
+    # newest first, PROPOSAL_SUMMARY_COLUMNS + n_items, never the body
+    def update_proposal(self, proposal_id: str, fields: dict) -> dict | None: ...
+    # PROPOSAL_UPDATABLE fields only; sets updated_at; None when the row does not exist
+
 
 REAL_CALL_COLUMNS = (
     "id",
@@ -172,6 +232,8 @@ create table if not exists vendors (
   track     text not null check (track in ('quote','schedule','negotiate')),
   phone     text not null,
   is_demo   integer not null default 0,
+  source    text not null default 'manual',
+  website   text,
   unique (owner_id, key)
 );
 create table if not exists runs (
@@ -238,7 +300,26 @@ create table if not exists ledger (
   created_at   text not null
 );
 create index if not exists ledger_user_expires_idx on ledger (user_id, expires_on);
+create table if not exists proposals (
+  id                text primary key,
+  user_id           text not null references profiles(id) on delete cascade,
+  request           text not null,
+  status            text not null default 'proposed'
+                      check (status in ('researching','proposed','approved','dispatched','rejected','failed')),
+  proposal          text not null default '{}',
+  approved_item_ids text not null default '[]',
+  run_id            text references runs(id) on delete set null,
+  created_at        text not null,
+  updated_at        text not null
+);
+create index if not exists proposals_user_created_idx on proposals (user_id, created_at desc);
 """
+
+# Columns added after 0001_init.sql. An older .calls/dormammu.db gets them on open (SqliteStore._migrate).
+SQLITE_COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("vendors", "source", "text not null default 'manual'"),
+    ("vendors", "website", "text"),
+)
 
 
 def default_sqlite_path() -> Path:
@@ -259,6 +340,15 @@ class SqliteStore:
         self._conn.execute("pragma journal_mode=wal")
         with self._lock, self._conn:
             self._conn.executescript(SQLITE_DDL)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Add the columns later migrations introduced to a database file created before them."""
+        with self._lock, self._conn:
+            for table, column, declaration in SQLITE_COLUMN_MIGRATIONS:
+                have = {r["name"] for r in self._conn.execute(f"pragma table_info({table})").fetchall()}
+                if column not in have:
+                    self._conn.execute(f"alter table {table} add column {column} {declaration}")
 
     # -- helpers --
 
@@ -572,6 +662,47 @@ class SqliteStore:
             [user_id, max(0, int(limit))],
         )
 
+    # -- proposals --
+
+    def create_proposal(self, user_id: str, request: str, proposal: dict, status: str = "proposed") -> dict:
+        if status not in PROPOSAL_STATUSES:
+            raise ValueError(f"unknown proposal status {status!r}; expected one of {PROPOSAL_STATUSES}")
+        now = utcnow_iso()
+        row = {
+            "id": new_id(),
+            "user_id": user_id,
+            "request": request,
+            "status": status,
+            "proposal": proposal if isinstance(proposal, dict) else {},
+            "approved_item_ids": [],
+            "run_id": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._insert("proposals", row)
+        return self.get_proposal(row["id"])  # type: ignore[return-value]
+
+    def get_proposal(self, proposal_id: str, user_id: str | None = None) -> dict | None:
+        sql, params = "select * from proposals where id = ?", [proposal_id]
+        if user_id is not None:
+            sql += " and user_id = ?"
+            params.append(user_id)
+        return self._one("proposals", sql, params)
+
+    def list_proposals(self, user_id: str, limit: int = 20) -> list[dict]:
+        rows = self._many(
+            "proposals",
+            "select * from proposals where user_id = ? order by created_at desc, rowid desc limit ?",
+            [user_id, max(0, int(limit))],
+        )
+        return [_proposal_summary(r) for r in rows]
+
+    def update_proposal(self, proposal_id: str, fields: dict) -> dict | None:
+        payload = _proposal_update_payload(fields)
+        if self._update("proposals", payload, "id = ?", [proposal_id]) == 0:
+            return None
+        return self.get_proposal(proposal_id)
+
 
 def _simulated_buckets(triples) -> dict[str, int]:
     """(simulated, dialed, n) triples -> the three evidence buckets. Shared by both backends."""
@@ -878,6 +1009,44 @@ class SupabaseStore:
         for r in rows:
             r.pop("runs", None)
         return rows
+
+    # -- proposals --
+
+    def create_proposal(self, user_id: str, request: str, proposal: dict, status: str = "proposed") -> dict:
+        if status not in PROPOSAL_STATUSES:
+            raise ValueError(f"unknown proposal status {status!r}; expected one of {PROPOSAL_STATUSES}")
+        payload = {
+            "user_id": user_id,
+            "request": request,
+            "status": status,
+            "proposal": proposal if isinstance(proposal, dict) else {},
+            "approved_item_ids": [],
+        }
+        return self._first(self._t("proposals").insert(payload).execute())  # type: ignore[return-value]
+
+    def get_proposal(self, proposal_id: str, user_id: str | None = None) -> dict | None:
+        q = self._t("proposals").select("*").eq("id", proposal_id)
+        if user_id is not None:
+            q = q.eq("user_id", user_id)
+        return self._first(q.limit(1).execute())
+
+    def list_proposals(self, user_id: str, limit: int = 20) -> list[dict]:
+        # `proposal->items` comes back as an `items` column: enough to count, without the regulations,
+        # citations and meta that make a body large.
+        cols = ", ".join(PROPOSAL_SUMMARY_COLUMNS) + ", proposal->items"
+        q = (
+            self._t("proposals")
+            .select(cols)
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(max(0, int(limit)))
+        )
+        return [_proposal_summary(r) for r in self._rows(q.execute())]
+
+    def update_proposal(self, proposal_id: str, fields: dict) -> dict | None:
+        payload = _proposal_update_payload(fields)
+        row = self._first(self._t("proposals").update(payload).eq("id", proposal_id).execute())
+        return row or self.get_proposal(proposal_id)
 
 
 def get_store() -> Store:

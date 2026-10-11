@@ -50,6 +50,9 @@ class VendorIn(BaseModel):
     track: Track
     phone: str = Field(min_length=1)
     is_demo: bool = False
+    # Omitted (None) means "leave as is": the store default is manual, and approval writes research.
+    source: Literal["manual", "research"] | None = None
+    website: str | None = Field(default=None, max_length=500)
 
 
 class VendorsIn(BaseModel):
@@ -58,6 +61,18 @@ class VendorsIn(BaseModel):
 
 class RunCreate(BaseModel):
     request: str = Field(min_length=1)
+
+
+class ResearchIn(BaseModel):
+    """POST /research: the same one-sentence request POST /runs takes, researched before anything is dialed."""
+
+    request: str = Field(min_length=1, max_length=2000)
+
+
+class ProposalApprove(BaseModel):
+    """POST /proposals/{id}/approve: the proposal item ids the user wants executed."""
+
+    item_ids: list[str] = Field(min_length=1, max_length=50)
 
 
 class LedgerFire(BaseModel):

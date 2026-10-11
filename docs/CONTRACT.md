@@ -72,7 +72,9 @@ read `.env` any other way.
 ## Data shapes (plain dicts, column names == JSON keys, snake_case everywhere in Python and SQL)
 
 ### vendors row
-`{id, owner_id, key, name, track, phone, is_demo}`; track in quote|schedule|negotiate.
+`{id, owner_id, key, name, track, phone, is_demo, source, website}`; track in quote|schedule|negotiate;
+source in manual|research (default manual; approval of a research item writes research); website is the
+page the phone was verified against (research rows) or null. Added by 0002_proposals.sql.
 
 ### CallPlan (router output)
 `{"vendor_key": str, "track": str, "objective": str, "voice_gender": "female"|"male"}`
@@ -101,7 +103,8 @@ STATE_RANK = planned 0, dialing 1, ringing 2, talking 3, extracting 4, done 6, f
 ### events row
 `{id, user_id, run_id, call_id, type, data (json), created_at}`. type in: run_requested,
 call_dispatched, call_simulated, call_connected, call_terminated, outcome_extracted,
-run_aggregated, ledger_written.
+run_aggregated, ledger_written, research_completed, proposal_approved, proposal_rejected (the last three
+are the research-first flow; data shapes under "Proposals" below).
 
 ### ledger row
 `{id, user_id, vendor_id, kind, label, amount_usd, effective_on, expires_on, source_call, created_at}`;
@@ -317,3 +320,107 @@ npm run build                    # Next build must pass
 uvicorn server.app:app --port 8000 --reload   (via: uv run uvicorn ...)
 npm run dev
 ```
+
+## Proposals: the research-first flow (Oct 11 2026, lane R2)
+
+The product saves time by doing the research, not just the dialing. `POST /research` runs the research
+engine (`research/engine.py`, lane R1) over the profile, the request and the roster and stores what it found
+as a proposal. The user approves items; `POST /proposals/{id}/approve` turns the approved items into vendor
+rows and a run, through the same assembly `POST /runs` uses. `POST /runs` is unchanged: it is the
+skip-research path. Migration: `supabase/migrations/0002_proposals.sql` (the orchestrator applies it;
+SqliteStore self-migrates on init).
+
+### proposals row
+```
+{id, user_id, request, status, proposal (json, below), approved_item_ids (json [str]), run_id | null,
+ created_at, updated_at}
+```
+status in researching|proposed|approved|dispatched|rejected|failed. `POST /research` writes proposed, or
+failed when the engine returned no items and reported errors. approve writes dispatched (+ run_id +
+approved_item_ids, the item ids that became calls rows); reject writes rejected. RLS: "own proposals".
+
+### proposal body (proposals.proposal). What `research.engine.research(profile, request, roster)` returns
+```
+{"request": str, "summary": str | null,
+ "items": [ProposalItem], "regulations": [{"topic": str, "note": str, "citations": [url]}],
+ "errors": [str],
+ "meta": {"web_search": bool, "seconds": float, "model": str | null, "generated_at": iso}}
+
+ProposalItem = {
+ "id": str,                              # stable inside the proposal, e.g. "isp-fiberfast-student-300"
+ "category": str,                        # movers | internet | dentist | ...
+ "track": "quote" | "schedule" | "negotiate",
+ "recommended": bool,
+ "vendor": {"name": str, "phone": str | null, "website": str | null, "address": str | null},
+ "plan": {"name": str | null, "monthly_usd": float | null, "one_time_usd": float | null, "term": str | null} | null,
+ "discounts": [{"label": str, "amount": str | null, "eligibility": str | null, "citations": [url]}],
+ "why": str,                             # one or two sentences, cited
+ "strategy": {"opening": str, "asks": [str], "fallback": str | null},
+ "regulations": [str],
+ "citations": [{"url": str, "title": str | null, "fetched_at": iso}],
+ "phone_verified": bool,                 # the phone appeared in a fetched source (or is a roster phone)
+ "source": "research" | "roster"}
+```
+The server normalizes on the way in (`server.app.normalize_proposal`): every item gets an `id`
+(`item_id` is accepted; missing ids become `item-N`), `errors`, `regulations` and `meta` always exist,
+pydantic models are dumped. Tolerant reads: `vendor` may be flat (`name`, `phone`, `website` on the item).
+Non-negotiable: the engine never invents a phone, a price or a discount; a phone is kept only when it
+appeared in a fetched source or on the roster. The server does not re-verify; it dials nothing without one.
+
+### Approval semantics (`server.app.approve_proposal`)
+- Item without `vendor.phone` -> skipped, reason "no verified phone". Unknown id -> "not in this proposal".
+  Two items on one vendor -> the second is skipped "same vendor as <item_id>". Over MAX_CALLS_PER_RUN ->
+  skipped with the cap named. No dialable item -> 400, no run.
+- Vendor row: the roster row whose phone matches (digits-only, last 10) is reused; otherwise
+  `upsert_vendors` with key `research_vendor_key(category, name)` = "r_" + slug, cap 40 chars; is_demo
+  false; source research; website kept.
+- calls row: vendor_id, vendor_key, track (item track, else vendor track, else by category), target_name,
+  target_phone, objective = `item_objective(item)` = strategy.opening + " " + why + " Ask for: " +
+  ", ".join(strategy.asks) + ".", kept under 600 chars (why is trimmed first); prior_context from
+  router.plan.prior_context; state planned.
+- Dispatch: `ALLOW_EXTERNAL_CALLS` (env, truthy 1|true|yes) set -> every row goes to
+  call.dispatch.dispatch_run. Unset -> rows whose vendor is_demo is false are pre-marked simulated=true,
+  error "approved, not dialed: external calling disabled", state dialing rank 1 (the tick's simulate path
+  drives them; call_simulated and call_dispatched are logged for them), and only is_demo rows go through
+  dispatch_run. Note: call.simulate clears `error` when a simulated row reaches done; the note survives on the
+  row's `simulated` flag and in its call_simulated event.
+- Only `proposed` proposals can be approved (409 otherwise); reject refuses `dispatched` (409).
+
+### Event data
+```
+research_completed  {proposal_id, status, request, items, phones_verified, categories, regulations,
+                     web_search, seconds, errors}        (no run_id)
+proposal_approved   {proposal_id, approved: n, skipped: [{item_id, reason}], dialed: n, simulated: n,
+                     external_calls_enabled: bool, item_ids: [str]}   run_id set
+proposal_rejected   {proposal_id, request}
+run_requested       also written for an approval, with kind "proposal", proposal_id and item_ids
+```
+`dialed` counts rows handed to dispatch_run (Dial may still simulate one on 429); `simulated` counts
+rows pre-marked here because external calling is disabled.
+
+### Store methods (both backends)
+```python
+def create_proposal(self, user_id: str, request: str, proposal: dict, status: str = "proposed") -> dict
+def get_proposal(self, proposal_id: str, user_id: str | None = None) -> dict | None
+def list_proposals(self, user_id: str, limit: int = 20) -> list[dict]
+    # newest first; {id, user_id, request, status, approved_item_ids, run_id, created_at, updated_at, n_items}
+    # (never the body)
+def update_proposal(self, proposal_id: str, fields: dict) -> dict | None
+    # fields limited to status|proposal|approved_item_ids|run_id; sets updated_at; None when absent;
+    # ValueError on an unknown status
+# upsert_vendors accepts and persists source and website when given; omitted means unchanged.
+```
+
+### Routes (auth required, /api/py)
+```
+POST /research                     {request} -> proposals row (status proposed|failed). 503 when
+                                   research.engine cannot be imported (detail "research engine unavailable: ...").
+                                   Nothing is dialed.
+GET  /proposals?limit=20           -> [listing rows, newest first]
+GET  /proposals/{id}               -> full proposals row (404 for another user's)
+POST /proposals/{id}/approve       {item_ids: [str]} -> {"run": assembled run, "skipped": [{item_id, reason}],
+                                   "external_calls_enabled": bool, "proposal": updated row}
+POST /proposals/{id}/reject        -> proposals row (status rejected)
+POST /runs                         unchanged: the skip-research path
+```
+`VendorIn` (POST /vendors) also accepts optional `source` (manual|research) and `website`.

@@ -364,3 +364,133 @@ def test_user_call_history_and_counts(backend):
     assert str(real[1]["ended_at"]).startswith("2026-10-01T00:01:00")
     assert [r["id"] for r in store.real_dial_calls(user_id, limit=1)] == [failed_real["id"]]
     assert store.real_dial_calls(str(uuid.uuid4())) == []
+
+
+# ---------------------------------------------------------------------------------------------
+# Proposals (0002_proposals.sql) and the vendors columns it adds
+# ---------------------------------------------------------------------------------------------
+
+
+def test_proposal_crud(backend):
+    store, user_id = backend
+    body = {
+        "request": "move me",
+        "items": [
+            {"id": "a", "category": "internet", "vendor": {"name": "FiberFast", "phone": "+15550100001"}},
+            {"id": "b", "category": "dentist", "vendor": {"name": "Smiles", "phone": None}},
+        ],
+        "regulations": [],
+        "errors": [],
+        "meta": {"web_search": True},
+    }
+    row = store.create_proposal(user_id, "move me", body)
+    assert row["user_id"] == user_id and row["request"] == "move me"
+    assert row["status"] == "proposed"
+    assert row["proposal"] == body
+    assert row["approved_item_ids"] == [] and row["run_id"] is None
+    assert row["created_at"] and row["updated_at"]
+
+    assert store.get_proposal(row["id"])["id"] == row["id"]
+    assert store.get_proposal(row["id"], user_id)["proposal"]["items"][1]["id"] == "b"
+    assert store.get_proposal(row["id"], str(uuid.uuid4())) is None
+    assert store.get_proposal(str(uuid.uuid4())) is None
+
+    failed = store.create_proposal(user_id, "nothing found", {"items": [], "errors": ["no sources"]}, "failed")
+    assert failed["status"] == "failed"
+    with pytest.raises(ValueError):
+        store.create_proposal(user_id, "bad", {}, status="done")
+
+    listed = store.list_proposals(user_id)
+    assert [p["id"] for p in listed] == [failed["id"], row["id"]], "newest first"
+    assert all("proposal" not in p for p in listed), "the listing never carries the body"
+    assert [p["n_items"] for p in listed] == [0, 2]
+    assert [p["status"] for p in listed] == ["failed", "proposed"]
+    assert set(listed[0]) == {
+        "id",
+        "user_id",
+        "request",
+        "status",
+        "approved_item_ids",
+        "run_id",
+        "created_at",
+        "updated_at",
+        "n_items",
+    }
+    assert [p["id"] for p in store.list_proposals(user_id, limit=1)] == [failed["id"]]
+    assert store.list_proposals(str(uuid.uuid4())) == []
+
+    run = store.create_run(user_id, "move me")
+    updated = store.update_proposal(
+        row["id"],
+        {"status": "dispatched", "run_id": run["id"], "approved_item_ids": ["a"], "user_id": "ignored", "id": "x"},
+    )
+    assert updated["id"] == row["id"] and updated["user_id"] == user_id
+    assert updated["status"] == "dispatched" and updated["run_id"] == run["id"]
+    assert updated["approved_item_ids"] == ["a"]
+    assert updated["proposal"] == body
+    assert updated["updated_at"] >= row["updated_at"]
+    assert store.get_proposal(row["id"])["status"] == "dispatched"
+    assert store.update_proposal(str(uuid.uuid4()), {"status": "rejected"}) is None
+    with pytest.raises(ValueError):
+        store.update_proposal(row["id"], {"status": "whatever"})
+    assert store.update_proposal(failed["id"], {"status": "rejected"})["status"] == "rejected"
+
+
+def test_vendors_persist_source_and_website(backend):
+    store, user_id = backend
+    (row,) = store.upsert_vendors(
+        user_id,
+        [
+            {
+                "key": "r_internet-fiberfast",
+                "name": "FiberFast",
+                "track": "negotiate",
+                "phone": "+15550100001",
+                "is_demo": False,
+                "source": "research",
+                "website": "https://fiberfast.example/plans",
+            }
+        ],
+    )
+    assert row["source"] == "research"
+    assert row["website"] == "https://fiberfast.example/plans"
+    assert row["is_demo"] is False
+    plain = _vendors(store, user_id)[0]
+    assert plain["source"] == "manual" and plain["website"] is None
+    # An upsert that omits source and website leaves them alone.
+    (again,) = store.upsert_vendors(
+        user_id,
+        [{"key": "r_internet-fiberfast", "name": "FiberFast Inc", "track": "negotiate", "phone": "+15550100001"}],
+    )
+    assert again["id"] == row["id"] and again["name"] == "FiberFast Inc"
+    assert again["source"] == "research" and again["website"] == "https://fiberfast.example/plans"
+
+
+def test_sqlite_self_migrates_older_database(tmp_path):
+    """A .calls/dormammu.db created before 0002 gets the vendors columns and the proposals table on open."""
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        create table profiles (id text primary key, display_name text, phone text, prefs text not null default '{}',
+          cohort text not null default 'student', created_at text not null);
+        create table vendors (id text primary key, owner_id text not null, key text not null, name text not null,
+          track text not null, phone text not null, is_demo integer not null default 0, unique (owner_id, key));
+        insert into profiles (id, created_at) values ('u1', '2026-01-01T00:00:00+00:00');
+        insert into vendors (id, owner_id, key, name, track, phone, is_demo)
+          values ('v1', 'u1', 'movers_a', 'Pack & Go', 'quote', '+15550000001', 1);
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = SqliteStore(path)
+    (vendor,) = store.list_vendors("u1")
+    assert vendor["source"] == "manual" and vendor["website"] is None and vendor["is_demo"] is True
+    row = store.create_proposal("u1", "move me", {"items": []})
+    assert store.get_proposal(row["id"])["status"] == "proposed"
+    # Opening it again is a no-op.
+    again = SqliteStore(path)
+    assert again.list_vendors("u1")[0]["source"] == "manual"
