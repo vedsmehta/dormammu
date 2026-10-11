@@ -1,6 +1,6 @@
 """Extractor: transcript -> Outcome dict for one track. Never raises (BUILD-PLAN §4.7).
 
-One structured LLM call with the track's single pydantic model. The spoken "Summary:" line is a hint the
+One structured LLM call with the track's single pydantic model. The spoken "Just to confirm" recap is a hint the
 prompt prefers; the model still reads the whole transcript, so a non-compliant agent degrades rather than
 fails. Any failure (empty transcript, no key, timeout, refusal, parse error) returns empty_outcome() with
 a note, so the tick never stalls on one call.
@@ -52,8 +52,8 @@ extract the outcome as structured data.
 
 Rules:
 - Use only what the transcript says. If a value was not stated, leave it null. Never guess a number or a date.
-- The assistant was told to end with a spoken line starting "Summary:". When that line is present, prefer the \
-facts in it; otherwise read the whole conversation.
+- The assistant was told to recap before hanging up, usually starting "Just to confirm" or "So that's". When \
+a recap like that is present, prefer the facts in it; otherwise read the whole conversation.
 - If the call never reached a person (voicemail, dead air, one speaker only), return nulls and explain in note.
 - note is a short reason only when something could not be read; otherwise null."""
 

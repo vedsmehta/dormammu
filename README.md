@@ -35,7 +35,7 @@ solvable by one AI caller. The leverage is running many of them at once and aggr
 | Aggregator | `aggregator/` | Extractor, ranking, ledger rules |
 | Events | `events/` | Postgres `events` first, Keewano fire-and-forget |
 | Service | `server/` | FastAPI, routes under `/api/py`, Supabase or SQLite store |
-| Web | `app/`, `lib/` | Next.js 16, Supabase magic-link auth, Realtime dashboard |
+| Web | `app/`, `lib/` | Next.js 16, Supabase email + password auth, Realtime dashboard |
 | Schema | `supabase/migrations/` | RLS on every table from the first line |
 | SMS | `sms/` | Dial SMS send and wait-for-reply (CLI) |
 
@@ -63,8 +63,9 @@ uv run python scripts/smoke.py          # rings TEST_CALL_TO, prints the status 
 uv run python scripts/preflight.py      # Dial limits, roster, warms the plan cache with the demo sentence
 ```
 
-Sign in with a magic link, seed your vendor roster on `/onboarding` (phone numbers live in the
-`vendors` table, never in git), type a request, watch `/runs/<id>`.
+Create an account or sign in with email + password on `/login` (accounts are created server-side
+with the email pre-confirmed, so no mail is ever sent), seed your vendor roster on `/onboarding`
+(phone numbers live in the `vendors` table, never in git), type a request, watch `/runs/<id>`.
 
 Without Supabase keys the service falls back to SQLite and `DEV_USER_ID`, with no auth. That mode
 is for tests and local poking only.

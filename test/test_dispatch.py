@@ -81,10 +81,11 @@ async def test_dispatch_request_shape(monkeypatch):
     assert placed["max_duration_seconds"] == 180
     assert placed["voice_gender"] == "female"
     text = placed["instruction"]
-    assert "AI" in text.splitlines()[0]
+    assert text.splitlines()[0].startswith('Your first words on this call, exactly: "Hi, this is ')
+    assert "AI assistant" in text.splitlines()[1]
     assert row["objective"] in text
     assert "Last time you quoted $1,200." in text
-    assert "Summary:" in text
+    assert "Just to confirm" in text
 
 
 async def test_limit_error_becomes_labeled_simulated_row(monkeypatch):

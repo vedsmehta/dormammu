@@ -27,7 +27,7 @@ from events.log import log_event
 from router import plan as planner
 from server import store as store_mod
 from server.auth import bearer_token, current_user_id, ensure_profile
-from server.schemas import JsonRpcRequest, LedgerFire, ProfileUpdate, RunCreate, VendorsIn
+from server.schemas import JsonRpcRequest, LedgerFire, ProfileUpdate, RunCreate, SignupIn, VendorsIn
 from server.store import TERMINAL_STATES, Store
 from settings import load_env
 
@@ -119,6 +119,72 @@ async def no_store_header(request: Request, call_next):
 
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+# ---------------------------------------------------------------------------------------------
+# Auth: password accounts, created server-side (no email delivery anywhere in the flow)
+# ---------------------------------------------------------------------------------------------
+
+
+def supabase_admin() -> Any | None:
+    """Service-role Supabase client for GoTrue admin calls, or None when Supabase is not configured.
+
+    Module-level so tests can monkeypatch it. Never cached: the secret key may be rotated at runtime.
+    """
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SECRET_KEY")
+    if not url or not key:
+        return None
+    from supabase import create_client
+
+    return create_client(url, key)
+
+
+def _is_duplicate_user_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    code = str(getattr(exc, "code", "") or "").lower()
+    status = getattr(exc, "status", None)
+    return (
+        "already" in text
+        or "duplicate" in text
+        or code in {"email_exists", "user_already_exists", "phone_exists"}
+        or status == 422
+        and "exist" in text
+    )
+
+
+@app.post(f"{PREFIX}/auth/signup")
+def auth_signup(body: SignupIn, store: StoreDep) -> dict:
+    """Create a password account via the GoTrue admin API with email_confirm set, so sign-in works
+    immediately with signInWithPassword and nothing depends on email delivery. Unauthenticated."""
+    admin = supabase_admin()
+    if admin is None:
+        raise HTTPException(status_code=400, detail="Supabase is not configured; use DEV_USER_ID locally")
+    attributes: dict[str, Any] = {
+        "email": body.email,
+        "password": body.password,
+        "email_confirm": True,
+        "user_metadata": {"display_name": body.display_name} if body.display_name else {},
+    }
+    try:
+        response = admin.auth.admin.create_user(attributes)
+    except Exception as exc:
+        if _is_duplicate_user_error(exc):
+            raise HTTPException(status_code=409, detail="account exists, sign in instead") from exc
+        message = str(exc) or exc.__class__.__name__
+        raise HTTPException(status_code=502, detail=f"account creation failed: {message[:300]}") from exc
+    user = getattr(response, "user", None)
+    user_id = getattr(user, "id", None)
+    if not user_id:
+        raise HTTPException(status_code=502, detail="account creation returned no user id")
+    user_id = str(user_id)
+    # The auth user exists even if this fails: the DB trigger (Supabase) or the first authed request
+    # creates the profile, so a profile hiccup must not turn a successful signup into an error.
+    with contextlib.suppress(Exception):
+        ensure_profile(store, user_id)
+        if body.display_name:
+            store.upsert_profile(user_id, {"display_name": body.display_name})
+    return {"id": user_id, "email": body.email}
 
 
 # ---------------------------------------------------------------------------------------------

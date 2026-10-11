@@ -111,7 +111,9 @@ class FakeDial:
         transfer_to: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict:
-        assert instruction.startswith(AI_DISCLOSURE), "AI disclosure must come first in every instruction"
+        assert instruction.startswith("Your first words on this call") and AI_DISCLOSURE in instruction, (
+            "AI disclosure must come first in every instruction"
+        )
         assert max_duration_seconds == 180
         assert idempotency_key
         if len(self.placed) >= self.limit:
@@ -555,3 +557,111 @@ def test_auth_paths(client, monkeypatch, httpx_mock):
     assert c.get(f"{P}/profile", headers={"Authorization": "Bearer good-token"}).status_code == 200
     assert c.get(f"{P}/profile", headers={"Authorization": "Bearer bad-token"}).status_code == 401
     assert len(httpx_mock.get_requests()) == 2
+
+
+# ---------------------------------------------------------------------------------------------
+# POST /auth/signup: password accounts via the GoTrue admin API, no email delivery anywhere
+# ---------------------------------------------------------------------------------------------
+
+SIGNUP_USER = "00000000-0000-4000-8000-0000000000aa"
+
+
+class _FakeUser:
+    def __init__(self, user_id: str, email: str) -> None:
+        self.id = user_id
+        self.email = email
+
+
+class _FakeUserResponse:
+    def __init__(self, user_id: str, email: str) -> None:
+        self.user = _FakeUser(user_id, email)
+
+
+class FakeSupabaseAdmin:
+    """Stands in for create_client(SUPABASE_URL, SUPABASE_SECRET_KEY): only auth.admin.create_user."""
+
+    def __init__(self, *, fail_with: Exception | None = None) -> None:
+        self.created: list[dict] = []
+        self.fail_with = fail_with
+        self.auth = self
+        self.admin = self
+
+    def create_user(self, attributes: dict) -> _FakeUserResponse:
+        if self.fail_with is not None:
+            raise self.fail_with
+        self.created.append(dict(attributes))
+        return _FakeUserResponse(SIGNUP_USER, attributes["email"])
+
+
+def test_signup_without_supabase_is_400(client, monkeypatch):
+    c, _ = client
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SECRET_KEY", raising=False)
+    r = c.post(f"{P}/auth/signup", json={"email": "new@example.com", "password": "correct horse"})
+    assert r.status_code == 400
+    assert r.json()["detail"] == "Supabase is not configured; use DEV_USER_ID locally"
+
+
+def test_signup_validates_body(client):
+    c, _ = client
+    assert c.post(f"{P}/auth/signup", json={"email": "nope", "password": "longenough"}).status_code == 422
+    assert c.post(f"{P}/auth/signup", json={"email": "a@b.co", "password": "short"}).status_code == 422
+    assert c.post(f"{P}/auth/signup", json={"password": "longenough"}).status_code == 422
+
+
+def test_signup_creates_confirmed_user_and_profile(client, monkeypatch):
+    c, store = client
+    fake = FakeSupabaseAdmin()
+    monkeypatch.setattr(app_module, "supabase_admin", lambda: fake)
+
+    r = c.post(
+        f"{P}/auth/signup",
+        json={"email": "  New.Person@Example.com ", "password": "correct horse battery", "display_name": " Ved "},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"id": SIGNUP_USER, "email": "new.person@example.com"}
+
+    assert len(fake.created) == 1
+    sent = fake.created[0]
+    assert sent["email"] == "new.person@example.com"
+    assert sent["password"] == "correct horse battery"
+    assert sent["email_confirm"] is True, "email_confirm must be set so no confirmation mail is needed"
+    assert sent["user_metadata"] == {"display_name": "Ved"}
+
+    profile = store.get_profile(SIGNUP_USER)
+    assert profile is not None
+    assert profile["display_name"] == "Ved"
+    assert profile["cohort"] == "student"
+
+    # No bearer was needed and no session was minted here: the browser signs in afterwards.
+    assert "set-cookie" not in {k.lower() for k in r.headers}
+
+
+def test_signup_without_display_name_leaves_profile_default(client, monkeypatch):
+    c, store = client
+    fake = FakeSupabaseAdmin()
+    monkeypatch.setattr(app_module, "supabase_admin", lambda: fake)
+    r = c.post(f"{P}/auth/signup", json={"email": "plain@example.com", "password": "correct horse"})
+    assert r.status_code == 200, r.text
+    assert fake.created[0]["user_metadata"] == {}
+    assert store.get_profile(SIGNUP_USER)["display_name"] is None
+
+
+def test_signup_duplicate_is_409(client, monkeypatch):
+    c, store = client
+    fake = FakeSupabaseAdmin(fail_with=Exception("A user with this email address has already been registered"))
+    monkeypatch.setattr(app_module, "supabase_admin", lambda: fake)
+    r = c.post(f"{P}/auth/signup", json={"email": "dupe@example.com", "password": "correct horse"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "account exists, sign in instead"
+    assert store.get_profile(SIGNUP_USER) is None
+
+
+def test_signup_other_admin_error_is_502(client, monkeypatch):
+    c, _ = client
+    fake = FakeSupabaseAdmin(fail_with=Exception("Database error creating new user"))
+    monkeypatch.setattr(app_module, "supabase_admin", lambda: fake)
+    r = c.post(f"{P}/auth/signup", json={"email": "boom@example.com", "password": "correct horse"})
+    assert r.status_code == 502
+    assert "Database error" in r.json()["detail"]
+    assert "correct horse" not in r.text, "the password must never be echoed"

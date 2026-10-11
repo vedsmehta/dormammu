@@ -58,3 +58,34 @@ export const upsertProfile = (fields: Partial<Omit<Profile, "id" | "created_at">
 
 export const getLedger = () => pyFetch<LedgerRow[]>("/ledger");
 export const fireLedger = (as_of: string) => post<AssembledRun>("/ledger/fire", { as_of });
+
+// Password sign-up goes through the Python service (GoTrue admin API with email_confirm set), so no
+// email is ever sent and no Bearer is attached: there is no session yet. 409 means the account exists.
+export type SignupResult = { id: string; email: string };
+export async function signup(email: string, password: string, display_name?: string): Promise<SignupResult> {
+  const res = await fetch("/api/py/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, display_name: display_name || null }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new ApiError(res.status, body, "/auth/signup");
+  }
+  return (await res.json()) as SignupResult;
+}
+
+// There is no cross-run calls endpoint and GET /runs returns bare run rows, so list views compose:
+// the run rows, then the assembled run (calls + aggregate) for each of the most recent ones. Runs
+// whose fetch fails are left out rather than failing the whole list.
+export async function assembleRuns(runs: RunListItem[], limit = 20): Promise<AssembledRun[]> {
+  const recent = runs.slice(0, limit);
+  const settled = await Promise.allSettled(recent.map((r) => getRun(r.id)));
+  return settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
+}
+
+export async function getRecentRuns(limit = 20): Promise<AssembledRun[]> {
+  const runs = await getRuns();
+  return assembleRuns(runs, limit);
+}

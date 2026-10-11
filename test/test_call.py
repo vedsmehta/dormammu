@@ -36,10 +36,11 @@ def test_result_written_and_read_back():
 
 def test_cli_instructions_open_with_disclosure_and_carry_task():
     text = dispatch.build_instructions(CallRequest(to="+1", task="Book a haircut", fields=["time", "price"]))
-    assert "AI" in text.splitlines()[0]
+    assert text.splitlines()[0].startswith('Your first words on this call, exactly: "Hi, this is ')
+    assert "AI assistant" in text.splitlines()[1]
     assert "Book a haircut" in text
     assert "time, price" in text
-    assert "Summary:" in text
+    assert "Just to confirm" in text
 
 
 # ----- dial_client over a mocked transport ---------------------------------------------------------------

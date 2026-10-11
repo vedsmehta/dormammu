@@ -76,7 +76,7 @@ def test_negotiate_fixture_reduces_next_month():
 def test_fixture_transcript_shape(track):
     turns = fixture_transcript(track, "Bay Movers", "seed-1")
     assert turns[0]["speaker"] == "agent" and turns[0]["text"].startswith(SPOKEN_DISCLOSURE)
-    assert turns[-1]["speaker"] == "agent" and turns[-1]["text"].startswith("Summary: ")
+    assert turns[-1]["speaker"] == "agent" and turns[-1]["text"].startswith("Just to confirm, ")
     assert any(t["speaker"] == "user" for t in turns)
     assert all(set(t) == {"speaker", "text"} for t in turns)
     assert "Bay Movers" in turns[-1]["text"]
@@ -111,7 +111,7 @@ def test_timeline_dialing_ringing_talking_done():
     assert out["simulated"] is True
     assert out["outcome"]["track"] == "quote" and out["outcome"]["amount_usd"]
     assert out["transcript"].startswith(f"agent: {SPOKEN_DISCLOSURE}")
-    assert "Summary:" in out["transcript"].splitlines()[-1]
+    assert "Just to confirm" in out["transcript"].splitlines()[-1]
     assert out["transcript_turns"][0]["startMs"] == 0 and out["transcript_turns"][-1]["endMs"] <= talk * 1000
     assert out["duration_seconds"] == float(talk)
     assert out["termination_type"] == "completed"

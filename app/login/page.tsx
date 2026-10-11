@@ -1,33 +1,97 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Brand, Button, ErrorNote, Field, inputClass, Panel } from "@/components/ui";
+import { ApiError, getVendors, signup } from "@/lib/api";
 import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
 
+type Mode = "signin" | "signup";
+
+const MIN_PASSWORD = 8;
+
+/** Pull the JSON "detail" out of a FastAPI error body, else fall back to the raw text. */
+function apiMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(err.body) as { detail?: unknown };
+      if (typeof parsed.detail === "string") return parsed.detail;
+    } catch {
+      // not JSON; fall through
+    }
+    return err.body.slice(0, 200) || `request failed (${err.status})`;
+  }
+  if (err instanceof Error) return err.message;
+  return "something went wrong";
+}
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const canSubmit = email.trim().length > 0 && password.length >= MIN_PASSWORD && !busy;
+
+  /** Once a session cookie exists, send first-timers to onboarding and everyone else home. */
+  const routeAfterSignIn = async () => {
+    let dest = "/";
+    try {
+      const vendors = await getVendors();
+      if (vendors.length === 0) dest = "/onboarding";
+    } catch {
+      // The API being unreachable must not block sign-in; the home page links to onboarding.
+    }
+    router.replace(dest);
+    router.refresh();
+  };
+
+  const signIn = async (): Promise<boolean> => {
     const supabase = getSupabaseBrowser();
-    if (!supabase) return;
-    setBusy(true);
-    setError(null);
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    if (!supabase) return false;
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
     });
-    setBusy(false);
     if (err) {
       setError(err.message);
-      return;
+      return false;
     }
-    setSent(true);
+    return true;
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "signup") {
+        try {
+          await signup(email.trim().toLowerCase(), password, displayName.trim() || undefined);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            setError("That account already exists. Switch to sign in.");
+          } else {
+            setError(apiMessage(err));
+          }
+          return;
+        }
+      }
+      if (await signIn()) await routeAfterSignIn();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setError(null);
   };
 
   return (
@@ -51,38 +115,88 @@ export default function LoginPage() {
                 Go to the app
               </Link>
             </div>
-          ) : sent ? (
-            <div className="space-y-3">
-              <h1 className="text-lg font-semibold">Check your email</h1>
-              <p className="text-sm text-muted">
-                A magic link went to <span className="font-mono text-fg">{email}</span>. Open it on this
-                device to finish signing in.
-              </p>
-              <button type="button" className="text-xs text-dim hover:text-fg" onClick={() => setSent(false)}>
-                use a different address
-              </button>
-            </div>
           ) : (
             <form onSubmit={submit} className="space-y-4">
               <div>
-                <h1 className="text-lg font-semibold">Sign in</h1>
-                <p className="mt-1 text-sm text-muted">Magic link. No password.</p>
+                <h1 className="text-lg font-semibold">{mode === "signin" ? "Sign in" : "Create account"}</h1>
+                <p className="mt-1 text-sm text-muted">
+                  {mode === "signin"
+                    ? "Email and password."
+                    : "Pick a password. You are signed in right away, nothing to confirm."}
+                </p>
               </div>
               <Field label="email">
                 <input
                   type="email"
                   required
                   autoFocus
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@stanford.edu"
                   className={inputClass}
                 />
               </Field>
+              <Field
+                label="password"
+                hint={mode === "signup" ? `at least ${MIN_PASSWORD} characters` : undefined}
+              >
+                <input
+                  type="password"
+                  required
+                  minLength={MIN_PASSWORD}
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              {mode === "signup" ? (
+                <Field label="name" hint="optional, shown on your profile">
+                  <input
+                    type="text"
+                    autoComplete="name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              ) : null}
               <ErrorNote message={error} />
-              <Button type="submit" disabled={busy || email.trim().length === 0} className="w-full">
-                {busy ? "sending…" : "Send magic link"}
+              <Button type="submit" disabled={!canSubmit} className="w-full">
+                {busy
+                  ? mode === "signin"
+                    ? "signing in…"
+                    : "creating account…"
+                  : mode === "signin"
+                    ? "Sign in"
+                    : "Create account"}
               </Button>
+              <p className="text-center text-xs text-dim">
+                {mode === "signin" ? (
+                  <>
+                    New here?{" "}
+                    <button
+                      type="button"
+                      className="text-accent hover:underline"
+                      onClick={() => switchMode("signup")}
+                    >
+                      Create an account
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      className="text-accent hover:underline"
+                      onClick={() => switchMode("signin")}
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
+              </p>
             </form>
           )}
         </Panel>

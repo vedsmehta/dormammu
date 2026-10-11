@@ -2,11 +2,39 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Track = Literal["quote", "schedule", "negotiate"]
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class SignupIn(BaseModel):
+    """POST /auth/signup. Password accounts are created server-side, so no email is ever sent."""
+
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=8, max_length=256)
+    display_name: str | None = Field(default=None, max_length=120)
+
+    @field_validator("email")
+    @classmethod
+    def _email_shape(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not EMAIL_RE.match(value):
+            raise ValueError("email must look like name@domain.tld")
+        return value
+
+    @field_validator("display_name")
+    @classmethod
+    def _blank_name_is_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 class ProfileUpdate(BaseModel):

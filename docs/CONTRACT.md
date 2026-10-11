@@ -14,7 +14,9 @@ Python is the backend. Next.js is the UI and auth layer only.
   in dev and to `/api/` in production).
 - Next.js (root of repo, App Router, Tailwind v4) calls `/api/py/...` from the browser with
   `Authorization: Bearer <supabase access_token>`. Next.js does NOT proxy. Next.js uses Supabase
-  directly only for auth (magic link, cookies) and Realtime subscriptions on `calls`/`runs`.
+  directly only for auth (email + password, cookies) and Realtime subscriptions on `calls`/`runs`.
+  Account creation goes through the Python service (`POST /api/py/auth/signup`), which calls the
+  GoTrue admin API with `email_confirm` set, so nothing in the auth flow depends on email delivery.
 - LLM: OpenAI (`openai` python package v3.x, `OPENAI_API_KEY`, model `OPENAI_MODEL`, default `gpt-4.1`).
   Structured output via `client.chat.completions.parse(..., response_format=<pydantic model>)` or
   the Responses API equivalent. Introspect the installed SDK before writing; do not assume 1.x API.
@@ -247,6 +249,10 @@ async def send_events(user_id: str, events: list[dict]) -> bool   # truncates st
 
 ```
 GET  /health                      -> {"ok": true, "store": "supabase"|"sqlite"}
+POST /auth/signup                 {email, password (>=8), display_name?} -> {"id", "email"}. No auth.
+                                  GoTrue admin create_user with email_confirm=true (secret key, server-only),
+                                  then ensure_profile (+ display_name). 400 when Supabase is not configured,
+                                  409 "account exists, sign in instead", 502 on other GoTrue errors.
 GET  /account                     -> Dial account limits (server-side, secret stays server-side)
 GET  /profile                     -> profile row (creates default if absent)
 POST /profile                     {display_name?, phone?, prefs?, cohort?} -> profile row
@@ -279,8 +285,13 @@ set, return it (local dev only). Also accept `X-Internal-Secret: INTERNAL_API_SE
 - `next.config.ts`: remove `cacheComponents` and `partialPrefetching`; add the `/api/py/:path*`
   rewrite described above. Keep the Tailwind turbopack rule.
 - `lib/supabase/client.ts` (browser, `createBrowserClient`), `lib/supabase/server.ts` (cookies),
-  `middleware.ts` refreshes the session. Magic link login at `/login`, callback at
-  `/auth/callback`, onboarding at `/onboarding` (profile + 5 vendors via `POST /api/py/vendors`).
+  `proxy.ts` (Next 16's middleware) refreshes the session. Email + password login at `/login`:
+  "Sign in" calls `supabase.auth.signInWithPassword` in the browser (the `@supabase/ssr` client
+  writes the cookie session, so `proxy.ts` sees it); "Create account" first calls
+  `POST /api/py/auth/signup` via `lib/api.ts: signup(email, password, display_name?)` (no Bearer),
+  then signs in the same way. After sign-in: `GET /api/py/vendors` empty -> `/onboarding`, else `/`.
+  There is no `/auth/callback` route and no email is sent at any point. Onboarding at `/onboarding`
+  (profile + 5 vendors via `POST /api/py/vendors`).
 - `lib/api.ts`: `pyFetch(path, init)` attaches the current session's access token as a Bearer and
   `cache: "no-store"`.
 - `/` landing: signed out -> link to /login; signed in -> request form (POST /api/py/runs) + run list.

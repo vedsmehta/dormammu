@@ -25,8 +25,10 @@ RINGING_UNTIL_SECONDS = 11
 DEFAULT_TALK_SECONDS = 75
 TALK_JITTER_SECONDS = 20
 SIMULATED_NOTE = "simulated call, fixture outcome, not a real vendor quote"
-# The spoken opener, mirroring the first words router.instructions.build() requires on a real call.
-SPOKEN_DISCLOSURE = "Hi, this is an AI assistant calling on behalf of a client."
+# The spoken opener, mirroring the first words router.instructions.build() requires on a real call, and the
+# one-sentence AI line that follows it once the other side has answered.
+SPOKEN_DISCLOSURE = "Hi, this is Alex, am I speaking with"
+SPOKEN_AI_LINE = "I'm an AI assistant calling for a client. This is a simulated call."
 
 _CAVEATS = [
     "excludes packing materials",
@@ -97,14 +99,16 @@ def _money(amount: float) -> str:
 
 
 def fixture_transcript(track: str, target_name: str, seed: str, *, today: date | None = None) -> list[dict]:
-    """[{speaker, text}] opening with the AI disclosure and ending with a 'Summary: ...' line.
-    Speaker labels match Dial's: "agent" and "user"."""
+    """[{speaker, text}] opening with "Hi, this is Alex, am I speaking with ...", the one-sentence AI line,
+    and ending with a "Just to confirm, ..." recap. Speaker labels match Dial's: "agent" and "user"."""
     outcome = fixture_outcome(track, seed, today=today)
     name = target_name or "there"
-    opener = f"{SPOKEN_DISCLOSURE} This is a simulated call. Am I speaking with {name}?"
+    opener = f"{SPOKEN_DISCLOSURE} {name}?"
     turns: list[dict] = [
         {"speaker": "agent", "text": opener},
         {"speaker": "user", "text": f"Yes, this is {name}."},
+        {"speaker": "agent", "text": SPOKEN_AI_LINE},
+        {"speaker": "user", "text": "Okay, what can I do for you?"},
     ]
     if track == "quote":
         amount, unit = outcome["amount_usd"], outcome["unit"]
@@ -113,17 +117,17 @@ def fixture_transcript(track: str, target_name: str, seed: str, *, today: date |
         turns += [
             {
                 "speaker": "agent",
-                "text": "I am calling to get a quote for a two-bedroom move on November first.",
+                "text": "I'm looking at a two-bedroom move on November first. What would that run all-in?",
             },
             {
                 "speaker": "user",
                 "text": f"For a two-bedroom on that date we would be at {price}. That {caveats}.",
             },
-            {"speaker": "agent", "text": "Understood. Does that include the truck and two movers?"},
+            {"speaker": "agent", "text": "Got it. Does that include the truck and two movers?"},
             {"speaker": "user", "text": "Yes, truck, two movers and basic liability coverage."},
             {
                 "speaker": "agent",
-                "text": f"Summary: {name} quoted {price} for the November first move, {caveats}. Goodbye.",
+                "text": f"Just to confirm, {name} is at {price} for the November first move, {caveats}. Thanks, bye.",
             },
         ]
     elif track == "schedule":
@@ -132,14 +136,14 @@ def fixture_transcript(track: str, target_name: str, seed: str, *, today: date |
         turns += [
             {
                 "speaker": "agent",
-                "text": "I would like to book an appointment for next week, weekday afternoons.",
+                "text": "I'd like to book something next week, weekday afternoons. What's the earliest you have?",
             },
             {"speaker": "user", "text": f"I have {spoken} open."},
-            {"speaker": "agent", "text": "That works. Please book it."},
+            {"speaker": "agent", "text": "That works, go ahead and book it."},
             {"speaker": "user", "text": "Done, you are confirmed."},
             {
                 "speaker": "agent",
-                "text": f"Summary: appointment confirmed with {name} for {spoken}. Goodbye.",
+                "text": f"Just to confirm, {spoken} with {name}. Thanks, bye.",
             },
         ]
     else:
@@ -148,20 +152,26 @@ def fixture_transcript(track: str, target_name: str, seed: str, *, today: date |
         turns += [
             {
                 "speaker": "agent",
-                "text": "I am calling about the monthly bill. Is there a lower rate available?",
+                "text": "I'm going over the monthly bill. What promotions or adjustments are available on it right now?",
             },
             {
                 "speaker": "user",
                 "text": f"I can apply a loyalty discount of {saved} per month, effective {effective}.",
             },
-            {"speaker": "agent", "text": "Please apply it. Is there any contract change?"},
+            {
+                "speaker": "agent",
+                "text": "Let's do that. Is that the best rate available, and does it change the contract?",
+            },
             {
                 "speaker": "user",
                 "text": "No contract change, the discount stays as long as the account is current.",
             },
             {
                 "speaker": "agent",
-                "text": f"Summary: {name} reduced the bill by {saved} per month effective {effective}. Goodbye.",
+                "text": (
+                    f"Just to confirm, {name} is taking {saved} a month off starting {effective}, no contract "
+                    "change. Thanks, bye."
+                ),
             },
         ]
     return turns
