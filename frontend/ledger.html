@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ledger · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app">
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep app-head">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:70px; width:680px; height:200px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:240px; width:760px; height:220px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="dashboard.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="dashboard.html">Dashboard</a>
+          <a href="calls.html">Calls</a>
+          <a href="ledger.html" aria-current="page">Ledger</a>
+          <a href="profile.html">Profile</a>
+        </div>
+        <div class="nav-end"><a class="avatar" href="profile.html" aria-label="Maya Patel, profile">M</a></div>
+      </nav>
+      <div class="page-title">
+        <h1 class="rise" style="--d:.1s">Ledger</h1>
+        <p class="rise" style="--d:.2s">Every account Dormammu has touched, and when each one next needs attention. Every entry links to the call it came from.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet to-end grab sheet-up" style="--d:.3s">
+    <div class="wrap">
+      <section class="sec" aria-labelledby="l1">
+        <h2 id="l1">Needs attention</h2>
+        <ol class="rail wide">
+          <li class="next" style="--i:0">
+            <time>In 21 days · Nov 1</time>
+            <b>Northline Mobile student promo ends</b>
+            <p>Your phone bill goes from $45 to $55 a month. Want me to call retention and ask them to keep the rate?</p>
+            <div class="acts">
+              <button type="button" class="btn btn-primary btn-sm">Approve call</button>
+              <button type="button" class="btn btn-line btn-sm">Not now</button>
+            </div>
+            <a class="from" href="call.html">From the call on Aug 30</a>
+          </li>
+        </ol>
+      </section>
+
+      <section class="sec" aria-labelledby="l2">
+        <h2 id="l2">Upcoming</h2>
+        <ol class="rail wide">
+          <li style="--i:1">
+            <time>Thursday, Oct 15 · 2:30 PM</time>
+            <b>Campus Dental cleaning</b>
+            <p>New-patient cleaning and exam with Dr. Chen. Bring your student ID for 10% off.</p>
+            <a class="from" href="call.html">From today's call</a>
+          </li>
+          <li style="--i:2">
+            <time>Nov 1</time>
+            <b>Move-in day</b>
+            <p>Internet and renters insurance appear here once today's calls finish and you pick a quote.</p>
+            <a class="from" href="run.html">From today's run</a>
+          </li>
+          <li style="--i:3">
+            <time>Around Apr 15, 2027</time>
+            <b>Campus Dental six-month cleaning due</b>
+            <p>I will ask before rebooking.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="sec" aria-labelledby="l3">
+        <h2 id="l3">Past</h2>
+        <ol class="rail wide">
+          <li class="past" style="--i:4">
+            <time>Oct 1</time>
+            <b>Ironworks Gym, last charge</b>
+            <p>Membership canceled on Sep 25. Confirmation number on file.</p>
+            <a class="from" href="call.html">From the call on Sep 25</a>
+          </li>
+        </ol>
+      </section>
+      <p class="dash-note">Static prototype with example data. The person, vendors, prices and timings are made up, and nothing here is wired up.</p>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <a href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+    <a href="calls.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg>Calls</a>
+    <a href="ledger.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Ledger</a>
+    <a href="profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg>Profile</a>
+  </nav>
+  
+</body>
+</html>

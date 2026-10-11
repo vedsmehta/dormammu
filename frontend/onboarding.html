@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up your profile · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+  <div class="sky sky-deep auth">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:60px; width:640px; height:190px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:260px; width:720px; height:210px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <header class="auth-top rise">
+      <a class="brand" href="index.html">Dormammu</a>
+      <p>One request. Every call at once.</p>
+    </header>
+
+    <main class="auth-sheet sheet-up">
+      <ol class="progress" aria-label="Sign-in progress">
+        <li class="done">Email</li>
+        <li class="done">Confirm</li>
+        <li class="current" aria-current="step">Profile</li>
+      </ol>
+
+      <h1>Set up your profile</h1>
+      <p>This is what the agent knows about you when it calls. Your profile decides which discounts it asks for, and it only claims what you tell it here.</p>
+
+      <!-- Static prototype: the form only navigates to the next screen. -->
+      <form action="ready.html">
+        <div class="field">
+          <label for="name">Name the agent calls on behalf of</label>
+          <input id="name" type="text" placeholder="Maya Patel" autocomplete="name">
+        </div>
+
+        <fieldset class="field">
+          <legend>Which of these describes you?</legend>
+          <div class="pills">
+            <label class="pill"><input type="radio" name="cohort" checked><span>Full-time student</span></label>
+            <label class="pill"><input type="radio" name="cohort"><span>Veteran or military</span></label>
+            <label class="pill"><input type="radio" name="cohort"><span>Senior</span></label>
+            <label class="pill"><input type="radio" name="cohort"><span>New mover</span></label>
+            <label class="pill"><input type="radio" name="cohort"><span>None of these</span></label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="school">School, if you are a student</label>
+          <input id="school" type="text" placeholder="Your university" autocomplete="organization">
+          <p class="hint">Vendors usually want proof. Your university email is kept on file for that.</p>
+        </div>
+
+        <fieldset class="field">
+          <legend>When are you free for appointments?</legend>
+          <div class="pills">
+            <label class="pill"><input type="checkbox"><span>Mon</span></label>
+            <label class="pill"><input type="checkbox" checked><span>Tue</span></label>
+            <label class="pill"><input type="checkbox"><span>Wed</span></label>
+            <label class="pill"><input type="checkbox" checked><span>Thu</span></label>
+            <label class="pill"><input type="checkbox"><span>Fri</span></label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="after">Earliest time</label>
+          <select id="after">
+            <option>Any time</option>
+            <option>After 9 AM</option>
+            <option selected>After 1 PM</option>
+            <option>After 4 PM</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Finish setup</button>
+      </form>
+      <p class="proto">Static prototype. Nothing is sent or saved.</p>
+    </main>
+  </div>
+</body>
+</html>

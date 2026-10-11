@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run finished · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app">
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep app-head">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:70px; width:680px; height:200px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:240px; width:760px; height:220px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="dashboard.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="dashboard.html">Dashboard</a>
+          <a href="calls.html" aria-current="page">Calls</a>
+          <a href="ledger.html">Ledger</a>
+          <a href="profile.html">Profile</a>
+        </div>
+        <div class="nav-end"><a class="avatar" href="profile.html" aria-label="Maya Patel, profile">M</a></div>
+      </nav>
+      <div class="pulse">
+        <p class="glass-pill rise" style="--d:.1s">“I'm moving into my first apartment near campus on the 1st, handle it.”</p>
+        <p class="live num rise" style="--d:.2s">2:41</p>
+        <p class="sub rise" style="--d:.3s">Six calls, all finished</p>
+        <div class="strip rise" style="--d:.4s">
+          <div><span>Than one at a time</span><b>5.3× faster (est.)</b></div>
+          <div><span>Best internet</span><b>$50/mo</b></div>
+          <div><span>Dentist</span><b>Thu 2:30 PM</b></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet to-end grab sheet-up" style="--d:.3s">
+    <div class="wrap">
+      <section aria-label="Results">
+        <div class="rgroup">
+          <h3>Internet · 300 Mbps</h3>
+          <div class="rhead"><span></span><span>Standard</span><span>Student</span><span>You save</span><span></span></div>
+          <div class="rrow">
+            <span class="who"><a href="call.html">Sutro Fiber</a><i class="tag">Best</i><small>12-month student promo, no contract, activation waived</small></span>
+            <span class="num">$70</span>
+            <span class="num big">$50/mo</span>
+            <span class="num save">$240/yr</span>
+            <button type="button" class="btn btn-primary btn-sm">Choose</button>
+          </div>
+          <div class="rrow">
+            <span class="who"><a href="call.html">BayLink Internet</a><small>Needs an enrollment letter, 12-month contract, $50 activation</small></span>
+            <span class="num">$65</span>
+            <span class="num big">$55/mo</span>
+            <span class="num save">$120/yr</span>
+            <button type="button" class="btn btn-line btn-sm">Choose</button>
+          </div>
+          <div class="rrow">
+            <span class="who"><a href="call.html">Cableton</a><small>Quoted by text after no answer. Student ID check in store, $75 install</small></span>
+            <span class="num">$80</span>
+            <span class="num big">$60/mo</span>
+            <span class="num save">$240/yr</span>
+            <button type="button" class="btn btn-line btn-sm">Choose</button>
+          </div>
+        </div>
+        <div class="rgroup">
+          <h3>Renters insurance</h3>
+          <div class="rhead"><span></span><span>Standard</span><span>Student</span><span>You save</span><span></span></div>
+          <div class="rrow">
+            <span class="who"><a href="call.html">Hearth Mutual</a><i class="tag">Best</i><small>$20k of belongings, $500 deductible, renews yearly</small></span>
+            <span class="num">$18</span>
+            <span class="num big">$14/mo</span>
+            <span class="num save">$48/yr</span>
+            <button type="button" class="btn btn-primary btn-sm">Choose</button>
+          </div>
+          <div class="rrow">
+            <span class="who"><a href="call.html">Lantern Insurance</a><small>$15k of belongings, $1,000 deductible, needs a transcript</small></span>
+            <span class="num">$16</span>
+            <span class="num big">$15/mo</span>
+            <span class="num save">$12/yr</span>
+            <button type="button" class="btn btn-line btn-sm">Choose</button>
+          </div>
+        </div>
+        <div class="rgroup">
+          <h3>Dentist</h3>
+          <a class="crow" href="call.html">
+            <span class="dot"></span>
+            <span class="who">Campus Dental<small>New-patient cleaning and exam</small></span>
+            <span class="what">Thursday, Oct 15 · 2:30 PM<small>Booked. 10% off with student ID</small></span>
+            <span class="meta num">1:22<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+        </div>
+        <p class="est">
+          <strong>How the 5.3× is worked out (est.):</strong> the five phone calls took 10m 23s of talk time. Made one after
+          another, with an assumed 45s of dialing and hold each, that is about 14m 08s against 2m 41s here.
+          The Cableton text conversation is not counted. “You save” compares each student rate with that vendor's standard rate over 12 months.
+        </p>
+        <a class="more" href="calls.html">All past calls</a>
+      </section>
+      <p class="dash-note">Static prototype with example data. The person, vendors, prices and timings are made up, and nothing here is wired up.</p>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <a href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+    <a href="calls.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg>Calls</a>
+    <a href="ledger.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Ledger</a>
+    <a href="profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg>Profile</a>
+  </nav>
+  
+</body>
+</html>

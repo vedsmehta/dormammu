@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app">
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep app-head">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:70px; width:680px; height:200px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:240px; width:760px; height:220px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="dashboard.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="dashboard.html" aria-current="page">Dashboard</a>
+          <a href="calls.html">Calls</a>
+          <a href="ledger.html">Ledger</a>
+          <a href="profile.html">Profile</a>
+        </div>
+        <div class="nav-end"><a class="avatar" href="profile.html" aria-label="Maya Patel, profile">M</a></div>
+      </nav>
+      <div class="dash-top">
+        <h1 class="rise" style="--d:.1s">Good afternoon, Maya</h1>
+        <p class="rise" style="--d:.15s">Six calls are running and one thing needs your yes.</p>
+        <form class="askbox rise" style="--d:.2s">
+          <input type="text" data-ask data-ask-restore aria-label="What do you need handled?" placeholder="What do you need handled?" autocomplete="off">
+          <button type="button" class="btn btn-primary">Handle it</button>
+        </form>
+        <div class="chips rise" style="--d:.3s" aria-label="Examples">
+          <button type="button" class="glass-pill" data-fill="I'm moving into my first apartment near campus on the 1st, handle it.">Moving in</button>
+          <button type="button" class="glass-pill" data-fill="My phone bill is too high, get it down.">Lower a bill</button>
+          <button type="button" class="glass-pill" data-fill="Find me a dentist near campus this week.">Book a dentist</button>
+          <button type="button" class="glass-pill" data-fill="Cancel the subscriptions I don't use.">Cancel something</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet to-end grab sheet-up" style="--d:.3s">
+    <div class="wrap">
+      <div class="board">
+        <div class="stats">
+          <a class="panel stat hot" href="run.html" style="--i:0"><span class="lbl"><span class="dot talking"></span>Running now</span><b class="num">6</b><small>calls at the same time</small></a>
+          <a class="panel stat" href="#needs" style="--i:1"><span class="lbl">Needs you</span><b class="num">1</b><small>promo ending in 21 days</small></a>
+          <a class="panel stat" href="calls.html" style="--i:2"><span class="lbl">Calls made</span><b class="num">10</b><small>across 3 requests</small></a>
+          <a class="panel stat" href="calls.html" style="--i:3"><span class="lbl">On the phone for you</span><b class="num">20<i>min</i></b><small>7 finished calls</small></a>
+        </div>
+
+        <section class="panel span2" style="--i:4" aria-labelledby="p-run">
+          <h2 id="p-run">Running now <a href="run.html">Open the run</a></h2>
+          <div class="runline">
+            <q>I'm moving into my first apartment near campus on the 1st, handle it.</q>
+            <span class="clock num">02:07</span>
+          </div>
+          <a class="mini" href="run.html"><span class="dot"></span><span class="who">Sutro Fiber</span><span class="st">Done</span><span class="res">$50/mo</span></a>
+          <a class="mini" href="run.html"><span class="dot"></span><span class="who">BayLink Internet</span><span class="st">Done</span><span class="res">$55/mo</span></a>
+          <a class="mini" href="run.html"><span class="dot texting"></span><span class="who">Cableton</span><span class="st"><span class="t-texting">No answer, texting</span></span><span class="res"></span></a>
+          <a class="mini" href="run.html"><span class="dot talking"></span><span class="who">Hearth Mutual</span><span class="st"><span class="t-talking">Talking</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span><span class="res"></span></a>
+          <a class="mini" href="run.html"><span class="dot talking"></span><span class="who">Lantern Insurance</span><span class="st"><span class="t-talking">Talking</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span><span class="res"></span></a>
+          <a class="mini" href="run.html"><span class="dot"></span><span class="who">Campus Dental</span><span class="st">Done</span><span class="res">Thu 2:30 PM</span></a>
+        </section>
+
+        <div class="stack">
+          <section class="panel" id="needs" style="--i:5" aria-labelledby="p-needs">
+            <h2 id="p-needs">Needs you</h2>
+            <b class="ptitle">Northline Mobile promo ends in 21 days</b>
+            <p>Your phone bill goes from $45 to $55 a month on Nov 1. Want me to call and ask them to keep the rate?</p>
+            <div class="acts">
+              <button type="button" class="btn btn-primary btn-sm">Approve call</button>
+              <button type="button" class="btn btn-line btn-sm">Not now</button>
+            </div>
+          </section>
+          <section class="panel" style="--i:6" aria-labelledby="p-next">
+            <h2 id="p-next">Coming up <a href="ledger.html">Ledger</a></h2>
+            <ol class="rail">
+              <li class="next"><time>Thu, Oct 15 · 2:30 PM</time><b>Campus Dental cleaning</b></li>
+              <li><time>Nov 1</time><b>Move-in day</b></li>
+              <li><time>Nov 1</time><b>Northline promo ends</b></li>
+            </ol>
+          </section>
+        </div>
+
+        <section class="panel span2" style="--i:7" aria-labelledby="p-recent">
+          <h2 id="p-recent">Recent calls <a href="calls.html">All calls</a></h2>
+          <a class="mini" href="call.html"><span class="dot"></span><span class="who">Campus Dental</span><span class="st">Cleaning booked</span><span class="res num">Today</span></a>
+          <a class="mini" href="call.html"><span class="dot"></span><span class="who">BayLink Internet</span><span class="st">Quote, $55/mo</span><span class="res num">Today</span></a>
+          <a class="mini" href="call.html"><span class="dot"></span><span class="who">Sutro Fiber</span><span class="st">Quote, $50/mo</span><span class="res num">Today</span></a>
+          <a class="mini" href="call.html"><span class="dot"></span><span class="who">Ironworks Gym</span><span class="st">Canceled</span><span class="res num">Sep 25</span></a>
+          <a class="mini" href="call.html"><span class="dot warn"></span><span class="who">Ironworks Gym</span><span class="st">They needed you on the line</span><span class="res num">Sep 24</span></a>
+          <a class="mini" href="call.html"><span class="dot"></span><span class="who">Northline Mobile</span><span class="st">No change yet</span><span class="res num">Aug 30</span></a>
+        </section>
+
+        <section class="panel" style="--i:8" aria-labelledby="p-out">
+          <h2 id="p-out">How calls ended</h2>
+          <div class="bar" role="img" aria-label="Of 10 calls: 5 got an answer, 3 still going, 2 needed another try">
+            <i style="flex:5; background:var(--deep)"></i><i style="flex:3; background:var(--mint)"></i><i style="flex:2; background:#f2b84b"></i>
+          </div>
+          <ul class="legend">
+            <li><span><i style="background:var(--deep)"></i>Got an answer</span><b class="num">5</b></li>
+            <li><span><i style="background:var(--mint)"></i>Still going</span><b class="num">3</b></li>
+            <li><span><i style="background:#f2b84b"></i>Needed another try</span><b class="num">2</b></li>
+          </ul>
+        </section>
+      </div>
+      <p class="dash-note">Static prototype with example data. The person, vendors, prices and timings are made up, and nothing here is wired up.</p>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <a href="dashboard.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+    <a href="calls.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg>Calls</a>
+    <a href="ledger.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Ledger</a>
+    <a href="profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg>Profile</a>
+  </nav>
+  <script src="ask.js"></script>
+</body>
+</html>

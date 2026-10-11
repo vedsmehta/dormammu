@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live run · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app">
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep app-head">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:70px; width:680px; height:200px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:240px; width:760px; height:220px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="dashboard.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="dashboard.html">Dashboard</a>
+          <a href="calls.html" aria-current="page">Calls</a>
+          <a href="ledger.html">Ledger</a>
+          <a href="profile.html">Profile</a>
+        </div>
+        <div class="nav-end"><a class="avatar" href="profile.html" aria-label="Maya Patel, profile">M</a></div>
+      </nav>
+      <div class="pulse">
+        <div class="rings" aria-hidden="true"><i></i><i></i><i></i></div>
+        <p class="glass-pill rise" style="--d:.1s">“I'm moving into my first apartment near campus on the 1st, handle it.”</p>
+        <p class="live num rise" style="--d:.2s"><span class="dot talking"></span>02:07</p>
+        <p class="sub rise" style="--d:.3s">Six calls in progress at the same time</p>
+        <div class="strip rise" style="--d:.4s">
+          <div><span>Connected</span><b>5 of 6</b></div>
+          <div><span>Finished</span><b>3 of 6</b></div>
+          <div><span>Best internet so far</span><b>$50/mo</b></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet to-end grab sheet-up" style="--d:.3s">
+    <div class="wrap">
+      <div class="dash" style="padding-top:0">
+        <section aria-labelledby="run-h">
+          <h2 id="run-h">This run</h2>
+          <div class="group">
+            <h3>Internet</h3>
+          <a class="row" href="call.html" style="--i:0">
+            <span class="dot"></span>
+            <span class="who">Sutro Fiber</span>
+            <span class="state">Done</span>
+            <span class="time num">01:58</span>
+            <span class="got"><s>$70</s>$50/mo<em>Best so far · student rate</em></span>
+          </a>
+          <a class="row" href="call.html" style="--i:1">
+            <span class="dot"></span>
+            <span class="who">BayLink Internet</span>
+            <span class="state">Done</span>
+            <span class="time num">01:44</span>
+            <span class="got"><s>$65</s>$55/mo<em>Student rate</em></span>
+          </a>
+          <div class="row" style="--i:2">
+            <span class="dot texting"></span>
+            <span class="who">Cableton</span>
+            <span class="state"><span class="t-texting">No answer, texting</span></span>
+            <span class="time num">02:05</span>
+            <span class="got"></span>
+            <p class="said">Agent, by text: “What is your monthly price for 300 Mbps internet?”</p>
+          </div>
+          </div>
+          <div class="group">
+            <h3>Renters insurance</h3>
+          <div class="row" style="--i:3">
+            <span class="dot talking"></span>
+            <span class="who">Hearth Mutual</span>
+            <span class="state"><span class="t-talking">Talking</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+            <span class="time num">02:06</span>
+            <span class="got"></span>
+            <p class="said">Rep: “Students get $14 a month for the same coverage.”</p>
+          </div>
+          <div class="row" style="--i:4">
+            <span class="dot talking"></span>
+            <span class="who">Lantern Insurance</span>
+            <span class="state"><span class="t-talking">Talking</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+            <span class="time num">02:05</span>
+            <span class="got"></span>
+            <p class="said">Agent: “Maya is a full-time student. Is there a student rate?”</p>
+          </div>
+          </div>
+          <div class="group">
+            <h3>Dentist</h3>
+          <a class="row" href="call.html" style="--i:5">
+            <span class="dot"></span>
+            <span class="who">Campus Dental</span>
+            <span class="state">Done</span>
+            <span class="time num">01:22</span>
+            <span class="got">Thu 2:30 PM<em>Cleaning booked</em></span>
+          </a>
+          </div>
+          <a class="more" href="run-done.html">Prototype: see this run finished</a>
+        </section>
+
+        <aside aria-labelledby="side-h">
+          <h2 id="side-h">Landing in your ledger</h2>
+          <ol class="rail">
+            <li class="next" style="--i:0">
+              <time>Thursday, Oct 15 · 2:30 PM</time>
+              <b>Campus Dental cleaning</b>
+              <p>Booked on this run. Bring your student ID for 10% off.</p>
+            </li>
+            <li style="--i:1">
+              <time>Nov 1</time>
+              <b>Move-in day</b>
+              <p>Internet and renters insurance go in once the calls finish and you pick a quote.</p>
+            </li>
+          </ol>
+          <a class="more" href="ledger.html" style="margin-top:0">Open the ledger</a>
+        </aside>
+      </div>
+      <p class="dash-note">Static prototype with example data. The person, vendors, prices and timings are made up, and nothing here is wired up.</p>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <a href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+    <a href="calls.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg>Calls</a>
+    <a href="ledger.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Ledger</a>
+    <a href="profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg>Profile</a>
+  </nav>
+  
+</body>
+</html>
