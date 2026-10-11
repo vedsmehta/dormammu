@@ -245,6 +245,48 @@ export function EvidenceView() {
             )}
           </Panel>
 
+          {ev.loop ? (
+            <Panel className="span2" index={1}>
+              <PanelTitle href="/insights" linkText="Insights">
+                Self-improvement loop
+              </PanelTitle>
+              <p>
+                Every call is logged, the analysis layer reads the log, and the next call to the same vendor opens with what the last one learned. The
+                agent says that sentence out loud. It supplies context; it does not rewrite its own prompts.
+              </p>
+              <Facts
+                rows={[
+                  ["Calls that opened with prior context", `${ev.loop.n_with_prior_context} of ${ev.loop.n_calls}`],
+                  ["Runs where context was applied (events)", String(ev.loop.n_context_applied_events)],
+                  ["Vendors called more than once", String(ev.loop.context_effect?.n_repeat_vendors ?? EM)],
+                  [
+                    "Repeat quotes vs first quotes",
+                    ev.loop.context_effect?.quote?.later_lower_by_usd != null ? `$${ev.loop.context_effect.quote.later_lower_by_usd.toFixed(2)} lower on repeat calls` : EM,
+                  ],
+                  [
+                    "Repeat retention calls vs first",
+                    ev.loop.context_effect?.negotiate?.later_saved_more_usd != null ? `$${ev.loop.context_effect.negotiate.later_saved_more_usd.toFixed(2)}/mo more saved` : EM,
+                  ],
+                  ["Recommendations produced", String(ev.loop.n_recommendations ?? EM)],
+                ]}
+              />
+              {ev.loop.error ? <p className="note warn">{ev.loop.error}</p> : null}
+              <p className="rules-h">What the agent was told before recent calls</p>
+              {ev.loop.examples.length === 0 ? <p>No call has carried prior context yet. Call a vendor twice and the second call shows up here.</p> : null}
+              <ol className="rail">
+                {ev.loop.examples.map((x) => (
+                  <li key={x.call_id} style={{ animation: "none" }}>
+                    <b>
+                      {x.call_id && x.run_id ? <Link href={`/calls/${x.call_id}?run=${x.run_id}`}>{x.target_name}</Link> : x.target_name}
+                      {x.simulated ? <Tag tone="warn">Simulated</Tag> : null}
+                    </b>
+                    <span>{x.prior_context}</span>
+                  </li>
+                ))}
+              </ol>
+            </Panel>
+          ) : null}
+
           <Panel index={1}>
             <PanelTitle>Keewano</PanelTitle>
             <Facts

@@ -7,7 +7,7 @@ import { callHref, summarizeOutcome } from "@/components/calls/summary";
 import { AppShell, PageTitle } from "@/components/shell";
 import { Dot, ErrorNote, Loading, Tag, Wave } from "@/components/ui";
 import { getCalls, type CallWithRequest } from "@/lib/api";
-import { describeError, fmtDuration, fmtStamp, parseTs } from "@/lib/format";
+import { describeError, fmtDuration, fmtStamp, parseTs, tidy } from "@/lib/format";
 import { isTerminal, trackLabel, type Call } from "@/lib/types";
 
 // GET /calls returns rows newest first with the run's request and phones already masked.
@@ -154,7 +154,7 @@ export function CallsList() {
         const live = g.calls.some((c) => !isTerminal(c.state));
         const simulated = g.calls.filter((c) => c.simulated).length;
         return (
-          <section key={g.runId} className="request" aria-label={g.request}>
+          <section key={g.runId} className="request" aria-label={tidy(g.request)}>
             <div className="request-head">
               <div>
                 <time>
@@ -162,7 +162,7 @@ export function CallsList() {
                   {live ? <Tag>Live</Tag> : null}
                   {simulated > 0 ? <Tag tone="warn">{simulated} simulated</Tag> : null}
                 </time>
-                <q>{g.request}</q>
+                <q>{tidy(g.request)}</q>
               </div>
               <Link href={`/runs/${g.runId}`}>{live ? "Watch the run" : "Open the run"}</Link>
             </div>

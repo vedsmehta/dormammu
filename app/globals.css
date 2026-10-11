@@ -10,6 +10,7 @@
 
 :root {
   --ink: #2a1a31;
+  --bad: #b3261e;
   --ink-2: #6b5e71;
   --ink-3: #a79eab;
   --line: rgba(42, 26, 49, 0.12);
@@ -483,6 +484,11 @@
   .field input:disabled, .input:disabled { color: var(--ink-3); border-bottom-color: var(--ink-3); }
   .field .hint { margin-top: 10px; font-size: 14px; color: var(--ink-2); }
   .field.tight { margin-top: 18px; }
+  .field .err, .err { display: block; margin-top: 8px; font-size: 14px; font-weight: 500; color: var(--bad); }
+  .field.invalid > .lbl { color: var(--bad); }
+  .field input[aria-invalid="true"], .field select[aria-invalid="true"], .input[aria-invalid="true"] { border-bottom-color: var(--bad); }
+  .roster li > .err, .windows li > .err { grid-column: 1 / -1; margin: 0 0 4px; }
+  .roster li > .hint { grid-column: 1 / -1; margin: 0 0 4px; font-size: 14px; color: var(--ink-2); }
   .input.sm, .field .input.sm { font-size: 17px; padding: 8px 0 9px; }
   .fields-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
 
@@ -803,6 +809,19 @@
 
   /* ---------- finished run ---------- */
 
+  .lead { font: 500 clamp(19px, 2vw, 23px)/1.45 var(--display); letter-spacing: -0.01em; max-width: 60ch; }
+  .opts { margin-top: 10px; }
+  .opt { display: grid; grid-template-columns: auto 1fr; gap: 0 18px; align-items: start; padding: 20px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .opt.off { cursor: default; opacity: 0.6; }
+  .opt input[type="checkbox"], .rrow .pick { width: 20px; height: 20px; margin-top: 4px; accent-color: var(--deep); }
+  .rrow .pick { margin: 0 12px 0 0; vertical-align: -3px; }
+  .opt-body { display: grid; gap: 6px; min-width: 0; }
+  .opt .who { font: 600 21px/1.2 var(--display); letter-spacing: -0.02em; }
+  .opt small { font-size: 14px; color: var(--ink-2); }
+  .opt .line { font-size: 15px; overflow-wrap: anywhere; }
+  .opt .line.muted { color: var(--ink-2); }
+  .opt .line a { margin-right: 12px; text-decoration: underline; text-underline-offset: 3px; }
+  .rrow .who a.tag { margin-left: 8px; text-decoration: none; }
   .rgroup { padding-top: 46px; }
   .rgroup:first-child { padding-top: 0; }
   .rgroup h3 { font: 500 13px/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }

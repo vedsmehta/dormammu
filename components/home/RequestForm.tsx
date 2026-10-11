@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type CSSProperties } from "react";
 
 import { ErrorNote } from "@/components/ui";
-import { createRun } from "@/lib/api";
+import { research } from "@/lib/api";
 import { describeError } from "@/lib/format";
 
 const PLACEHOLDER = "What do you need handled?";
@@ -19,8 +19,8 @@ const EXAMPLES: { label: string; fill: string }[] = [
 ];
 
 /**
- * The ask box from dashboard.html. POST /api/py/runs awaits the fan-out (plan + place calls), so the
- * run id only exists once it returns; the button shows that wait, then we route to the run.
+ * The ask box from dashboard.html. POST /api/py/research looks up options first and dials nobody; the
+ * button shows that wait, then we route to the proposal, where the user approves who gets called.
  */
 export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
   const router = useRouter();
@@ -35,8 +35,8 @@ export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      const run = await createRun(request);
-      router.push(`/runs/${run.id}`);
+      const proposal = await research(request);
+      router.push(`/proposals/${proposal.id}`);
     } catch (err) {
       setError(describeError(err));
       setBusy(false);
@@ -57,7 +57,7 @@ export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
           disabled={busy}
         />
         <button type="submit" className="btn btn-primary" disabled={busy || text.trim().length === 0}>
-          {busy ? "Dispatching…" : "Handle it"}
+          {busy ? "Researching…" : "Handle it"}
         </button>
       </form>
       <div className="chips rise" style={{ "--d": ".3s" } as CSSProperties} aria-label="Examples">
@@ -74,7 +74,7 @@ export function RequestForm({ autoFocus = true }: { autoFocus?: boolean }) {
           </button>
         ))}
       </div>
-      {busy ? <p className="note">Planning the roster and placing calls. The run opens as soon as the fan-out is out.</p> : null}
+      {busy ? <p className="note">Researching providers, prices and discounts for your profile. This can take a minute. Nobody is called until you approve.</p> : null}
       <ErrorNote message={error} />
     </>
   );
