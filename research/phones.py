@@ -31,6 +31,7 @@ US_PHONE = re.compile(
 )
 TEL_HREF = re.compile(r"tel:\s*\+?\s*1?[\s\-.()]*(\d{3})[\s\-.()]*(\d{3})[\s\-.()]*(\d{4})", re.IGNORECASE)
 _TAGS = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+_OPEN_TAG = re.compile(r"<(script|style|noscript)[^>]*>.*$", re.IGNORECASE | re.DOTALL)  # cut off by MAX_FETCH_BYTES
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
 
@@ -123,6 +124,7 @@ def visible_text(raw: str | None) -> str:
     if not raw:
         return ""
     text = _TAGS.sub(" ", raw)
+    text = _OPEN_TAG.sub(" ", text)
     text = _TAG.sub(" ", text)
     return _WS.sub(" ", html.unescape(text)).strip()
 
@@ -232,8 +234,11 @@ def single_page_phone(text: str | None) -> str | None:
     """The one number a fetched page clearly presents as its own, else None.
 
     Taken only when the page exposes exactly one distinct tel: link, or no tel: links and exactly one
-    distinct written number. Several numbers (locations, fax, partners) mean we cannot tell, so None.
-    Vanity spellings are ignored here; they are only used to confirm a number the model reported.
+    distinct written number in its visible text. Several numbers (locations, fax, partners) mean we cannot
+    tell, so None. Written numbers are read from the visible text only: raw markup is full of ten-digit runs
+    that are not phone numbers (a UUID segment in a font URL inside a style block, for one), and this number
+    is taken on the page's authority alone. Vanity spellings are ignored here; they only confirm a number
+    the model reported.
     """
     if not text:
         return None
@@ -242,5 +247,5 @@ def single_page_phone(text: str | None) -> str | None:
         return links[0]
     if links:
         return None
-    written = find_phones(text, vanity=False)
+    written = find_phones(visible_text(text), vanity=False)
     return written[0] if len(written) == 1 else None
