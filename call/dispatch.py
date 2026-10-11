@@ -89,6 +89,8 @@ async def _dispatch_one(store: Any, run: dict, row: dict, profile: dict | None) 
             raise ValueError("row is not backed by a vendors row; only vendor rows are dialable")
         if not row.get("target_phone"):
             raise ValueError("row has no target_phone")
+        if os.environ.get("DORMAMMU_DRY_RUN", "").strip().lower() in {"1", "true", "yes"}:
+            raise RuntimeError("DORMAMMU_DRY_RUN is set; no real call placed")
         call = await dial_client.place_call(
             row["target_phone"],
             instruction,
