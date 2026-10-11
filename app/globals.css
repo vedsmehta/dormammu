@@ -246,10 +246,13 @@
     transition: box-shadow 0.3s var(--ease);
   }
   .askbox:focus-within { box-shadow: 0 30px 70px -26px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(134, 247, 226, 0.55); }
-  .askbox input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 18px/1.2 var(--body); text-overflow: ellipsis; }
-  .askbox input:focus { outline: 0; }
-  .askbox input::placeholder { color: var(--ink-3); opacity: 1; }
-  .askbox .btn { white-space: nowrap; }
+  .askbox { align-items: flex-end; border-radius: 34px; }
+  .askbox input, .askbox textarea { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 18px/1.35 var(--body); }
+  .askbox input { text-overflow: ellipsis; }
+  .askbox textarea { resize: none; overflow-y: auto; max-height: 40vh; padding: 10px 0; margin: 0; display: block; }
+  .askbox input:focus, .askbox textarea:focus { outline: 0; }
+  .askbox input::placeholder, .askbox textarea::placeholder { color: var(--ink-3); opacity: 1; }
+  .askbox .btn { white-space: nowrap; align-self: flex-end; }
   .chips { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
   .chips .glass-pill { padding: 10px 18px; font-size: 14px; }
   button.glass-pill { border: 0; color: inherit; font-family: inherit; cursor: pointer; transition: background 0.25s, color 0.25s, transform 0.25s var(--ease); }
@@ -1021,7 +1024,7 @@
     .nav-links { display: none; }
     .hero { padding-top: 64px; }
     .askbox { padding-left: 22px; }
-    .askbox input { font-size: 16px; }
+    .askbox input, .askbox textarea { font-size: 16px; }
     .fan-lines { display: none; }
     .fan { margin-top: 48px; padding-bottom: 60px; }
     .ends { grid-template-columns: 1fr 1fr; gap: 34px 12px; margin-top: 48px; }
