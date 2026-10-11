@@ -2,6 +2,19 @@
 
 export type Track = "quote" | "schedule" | "negotiate";
 
+/** Plain-language names for the three call tracks. */
+export const TRACK_LABEL: Record<Track, string> = {
+  quote: "Quotes",
+  schedule: "Appointments",
+  negotiate: "Negotiations",
+};
+
+export const TRACK_ORDER: Track[] = ["quote", "schedule", "negotiate"];
+
+export function trackLabel(track: string | null | undefined): string {
+  return (track && TRACK_LABEL[track as Track]) || (track ?? "other");
+}
+
 export type CallState = "planned" | "dialing" | "ringing" | "talking" | "extracting" | "done" | "failed";
 
 export const STATE_RANK: Record<CallState, number> = {
@@ -138,8 +151,25 @@ export interface Prefs {
   budget_ceiling_usd?: number | null;
   preferred_times?: string[];
   availability?: Availability[];
+  /** The name the agent introduces itself with on calls. Empty means the server default (Alex). */
+  caller_name?: string | null;
   [key: string]: unknown;
 }
+
+export const DEFAULT_CALLER_NAME = "Alex";
+
+/**
+ * Mirrors router/cohorts.py. Only `student` ships today; an unknown cohort falls back to student on the
+ * Python side, so the UI offers exactly what the agent can honestly claim.
+ */
+export const COHORTS: { key: string; label: string; asks: string[]; proof: string }[] = [
+  {
+    key: "student",
+    label: "Full-time student",
+    asks: ["student rate", "waive activation fee", "no-contract term"],
+    proof: "university email on file",
+  },
+];
 
 export interface Profile {
   id: string;

@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { summarizeOutcome } from "@/components/calls/summary";
 import { CallRow } from "@/components/run/CallRow";
 import { RunFooter } from "@/components/run/RunFooter";
-import { Brand, Chip, ErrorNote, StatusChip } from "@/components/ui";
-import { UserChip } from "@/components/UserChip";
+import { RunLedgerAside } from "@/components/run/RunLedgerAside";
+import { RunResults } from "@/components/run/RunResults";
+import { Chip, Dot, ErrorNote, StatusChip } from "@/components/ui";
 import { ApiError, getRun, tickRun } from "@/lib/api";
 import { fmtDuration, parseTs } from "@/lib/format";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
-import { isTerminal, type AssembledRun, type Call } from "@/lib/types";
+import { isTerminal, TRACK_ORDER, trackLabel, type AssembledRun, type Call, type Track } from "@/lib/types";
 
 const TICK_MS = 2000;
 const CLOCK_MS = 250;
@@ -66,6 +68,20 @@ function wallClockSeconds(run: AssembledRun | null, serverNow: number | null, ac
   }
   if (serverNow === null) return null;
   return Math.max(0, (serverNow - start) / 1000);
+}
+
+/** Calls grouped by track in the prototype's order, unknown tracks last. */
+function groupByTrack(calls: Call[]): [string, Call[]][] {
+  const groups = new Map<string, Call[]>();
+  for (const c of calls) {
+    const key = c.track ?? "other";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+  const ordered: [string, Call[]][] = [];
+  for (const t of TRACK_ORDER) if (groups.has(t)) ordered.push([t, groups.get(t)!]);
+  for (const [k, v] of groups) if (!TRACK_ORDER.includes(k as Track)) ordered.push([k, v]);
+  return ordered;
 }
 
 export function RunView({ runId }: { runId: string }) {
@@ -160,27 +176,43 @@ export function RunView({ runId }: { runId: string }) {
   const serverNow = nowMs === null ? null : nowMs + offsetMs;
   const calls = run?.calls ?? [];
   const connected = calls.filter((c) => c.state === "talking" || c.state === "extracting" || c.state === "done").length;
+  const finished = calls.filter((c) => isTerminal(c.state)).length;
   const failed = calls.filter((c) => c.state === "failed").length;
   const wall = wallClockSeconds(run, serverNow, active);
+  const bestQuote = (run?.aggregate?.tracks?.quote ?? []).find((c) => c.best) ?? null;
   const bestIds = new Set((run?.aggregate?.tracks?.quote ?? []).filter((c) => c.best).map((c) => c.id));
+  const firstSlot = (run?.aggregate?.tracks?.schedule ?? []).find((c) => c.outcome && (c.outcome as { slot_iso?: string | null }).slot_iso) ?? null;
+  const mult = run?.aggregate?.multiplier ?? null;
+  const groups = groupByTrack(calls);
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Brand />
-          <Link href="/" className="font-mono text-xs text-dim hover:text-fg">
-            ← runs
-          </Link>
-        </div>
-        <UserChip />
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <Link href="/" className="font-mono text-xs text-dim hover:text-fg">
+          ← dashboard
+        </Link>
+        {run ? (
+          <div className="flex items-center gap-2">
+            <StatusChip status={run.status} />
+            <Chip
+              tone={realtime === "live" ? "ok" : realtime === "error" ? "bad" : "muted"}
+              title={
+                realtime === "off"
+                  ? "Supabase not configured; polling only"
+                  : `Realtime ${realtime}; polling every ${TICK_MS / 1000}s regardless`
+              }
+            >
+              {realtime === "live" ? "live" : realtime === "off" ? "polling" : realtime}
+            </Chip>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
         <div className="space-y-3">
           <ErrorNote message={error} />
           <Link href="/" className="text-sm text-accent hover:underline">
-            back to runs
+            back to the dashboard
           </Link>
         </div>
       ) : null}
@@ -188,55 +220,108 @@ export function RunView({ runId }: { runId: string }) {
       {!run && !error ? <p className="font-mono text-sm text-dim">loading run…</p> : null}
 
       {run ? (
-        <section className="overflow-hidden rounded-lg border border-line bg-panel">
-          <header className="border-b border-line px-4 py-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <h1 className="text-lg font-medium leading-snug sm:text-xl">&ldquo;{run.request}&rdquo;</h1>
-              <div className="flex items-center gap-2">
-                <StatusChip status={run.status} />
-                <Chip
-                  tone={realtime === "live" ? "ok" : realtime === "error" ? "bad" : "muted"}
-                  title={
-                    realtime === "off"
-                      ? "Supabase not configured; polling only"
-                      : `Realtime ${realtime}; polling every ${TICK_MS / 1000}s regardless`
-                  }
-                >
-                  {realtime === "live" ? "live" : realtime === "off" ? "polling" : realtime}
-                </Chip>
+        <>
+          <header className="animate-rise py-6 text-center sm:py-10">
+            <q className="inline-block max-w-3xl rounded-full border border-line bg-panel px-5 py-2 text-sm text-muted sm:text-base">
+              {run.request}
+            </q>
+            <p className="tnum mt-5 flex items-center justify-center gap-4 font-display text-6xl font-semibold tracking-tight sm:text-8xl">
+              {active ? <Dot state="talking" className="h-4 w-4" /> : null}
+              {fmtDuration(wall)}
+            </p>
+            <p className="mt-2 text-muted">
+              {calls.length === 0
+                ? active
+                  ? "Planning the calls…"
+                  : "This run produced no calls"
+                : active
+                  ? `${calls.length - finished} of ${calls.length} ${calls.length === 1 ? "call" : "calls"} in progress at the same time`
+                  : `${calls.length} ${calls.length === 1 ? "call" : "calls"}, all finished`}
+            </p>
+            <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 divide-y divide-line rounded-2xl border border-line bg-panel sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              {active ? (
+                <>
+                  <div className="p-3">
+                    <span className="block text-xs text-muted">Connected</span>
+                    <b className="tnum block font-display text-xl font-semibold">
+                      {connected} of {calls.length}
+                    </b>
+                  </div>
+                  <div className="p-3">
+                    <span className="block text-xs text-muted">Finished</span>
+                    <b className="tnum block font-display text-xl font-semibold">
+                      {finished} of {calls.length}
+                      {failed ? <span className="ml-1 text-sm font-normal text-bad">({failed} failed)</span> : null}
+                    </b>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-3">
+                    <span className="block text-xs text-muted">Than one at a time</span>
+                    <b className={`tnum block font-display text-xl font-semibold ${mult !== null ? "text-ok" : "text-dim"}`}>
+                      {mult !== null ? `${mult.toFixed(1)}× faster (est.)` : "no estimate"}
+                    </b>
+                  </div>
+                  <div className="p-3">
+                    <span className="block text-xs text-muted">Finished</span>
+                    <b className="tnum block font-display text-xl font-semibold">
+                      {finished - failed} of {calls.length}
+                      {failed ? <span className="ml-1 text-sm font-normal text-bad">({failed} failed)</span> : null}
+                    </b>
+                  </div>
+                </>
+              )}
+              <div className="p-3">
+                <span className="block text-xs text-muted">
+                  {bestQuote ? (active ? "Best quote so far" : "Best quote") : firstSlot ? "Appointment" : "Best quote"}
+                </span>
+                <b className="tnum block truncate font-display text-xl font-semibold">
+                  {bestQuote ? summarizeOutcome(bestQuote).main : firstSlot ? summarizeOutcome(firstSlot).main : <span className="text-dim">none yet</span>}
+                </b>
               </div>
-            </div>
-            <div className="tnum mt-2 flex flex-wrap items-center gap-x-2 font-mono text-sm text-muted">
-              <span>
-                {calls.length} {calls.length === 1 ? "call" : "calls"}
-              </span>
-              <span className="text-dim">·</span>
-              <span className={connected > 0 ? "text-ok" : ""}>{connected} connected</span>
-              <span className="text-dim">·</span>
-              <span className={failed > 0 ? "text-bad" : ""}>{failed} failed</span>
-              <span className="text-dim">·</span>
-              <span className="text-fg">
-                <span aria-hidden="true">⏱ </span>
-                {fmtDuration(wall)}
-              </span>
-              {active ? <span className="animate-blink text-ok">▮</span> : null}
             </div>
           </header>
 
-          {calls.length === 0 ? (
-            <p className="px-4 py-6 font-mono text-sm text-dim">
-              {active ? "no calls planned yet…" : "this run produced no calls"}
-            </p>
-          ) : (
-            <ol className="divide-y divide-line">
-              {calls.map((call) => (
-                <CallRow key={call.id} call={call} serverNow={serverNow} best={bestIds.has(call.id)} />
-              ))}
-            </ol>
-          )}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+            <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+                <h2 className="font-mono text-xs uppercase tracking-widest text-teal">{active ? "This run" : "Results"}</h2>
+                <div className="tnum flex flex-wrap items-center gap-x-2 font-mono text-xs text-muted">
+                  <span className={connected > 0 ? "text-ok" : ""}>{connected} connected</span>
+                  <span className="text-dim">·</span>
+                  <span className={failed > 0 ? "text-bad" : ""}>{failed} failed</span>
+                  {active ? <span className="animate-blink text-ok">▮</span> : null}
+                </div>
+              </header>
 
-          <RunFooter aggregate={run.aggregate} wallSeconds={wall} active={active} nCalls={calls.length} />
-        </section>
+              {!active && run.aggregate ? <RunResults aggregate={run.aggregate} wallSeconds={wall} /> : null}
+
+              {calls.length === 0 ? (
+                <p className="px-4 py-6 font-mono text-sm text-dim">
+                  {active ? "no calls planned yet…" : "this run produced no calls"}
+                </p>
+              ) : (
+                groups.map(([track, rows]) => (
+                  <div key={track}>
+                    <h3 className="border-b border-line bg-panel-2 px-4 py-1.5 font-mono text-[11px] uppercase tracking-widest text-dim">
+                      {trackLabel(track)}
+                    </h3>
+                    <ol className="divide-y divide-line">
+                      {rows.map((call) => (
+                        <CallRow key={call.id} call={call} serverNow={serverNow} best={bestIds.has(call.id)} />
+                      ))}
+                    </ol>
+                  </div>
+                ))
+              )}
+
+              <RunFooter aggregate={run.aggregate} wallSeconds={wall} active={active} nCalls={calls.length} />
+            </section>
+
+            <RunLedgerAside run={run} active={active} />
+          </div>
+        </>
       ) : null}
 
       {tickError ? <p className="mt-3 font-mono text-xs text-warn">tick: {tickError}</p> : null}

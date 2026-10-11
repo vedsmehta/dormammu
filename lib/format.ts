@@ -129,3 +129,65 @@ export function shortId(id: string | null | undefined, n = 6): string {
   if (!id) return EM;
   return id.slice(-n);
 }
+
+/** 'Good morning' / 'Good afternoon' / 'Good evening' for a local Date. */
+export function greetingFor(d: Date): string {
+  const h = d.getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+/** 'Maya Patel' -> 'MP'; falls back to the first letter of an email, else '?'. */
+export function initials(name: string | null | undefined, fallback?: string | null): string {
+  const src = (name ?? "").trim() || (fallback ?? "").trim();
+  if (!src) return "?";
+  const parts = src.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return src[0].toUpperCase();
+}
+
+/** First name from a display name, else the local part of an email, else 'there'. */
+export function firstName(name: string | null | undefined, email?: string | null): string {
+  const n = (name ?? "").trim();
+  if (n) return n.split(/\s+/)[0];
+  const e = (email ?? "").trim();
+  if (e) return e.split("@")[0];
+  return "there";
+}
+
+/** A readable message for any thrown value. An ApiError carries a status; 401 and 404 get a hint. */
+export function describeError(e: unknown): string {
+  if (e instanceof Error) {
+    const status = (e as { status?: unknown }).status;
+    if (status === 401) return "Not authorized by the API (401). Sign in again or set DEV_USER_ID on the Python side.";
+    if (status === 404) return "Not found (404).";
+    return e.message;
+  }
+  return String(e);
+}
+
+const STAMP_FULL_FMT = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** Timestamp -> 'Oct 15, 2026, 2:30 PM'. */
+export function fmtStampFull(iso: string | null | undefined): string {
+  const ms = parseTs(iso);
+  if (ms === null) return EM;
+  return STAMP_FULL_FMT.format(new Date(ms));
+}
+
+const DAY_SHORT_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+
+/** Timestamp -> 'Oct 15', with the year added once it differs from the current one. */
+export function fmtDayFromTs(iso: string | null | undefined, now: Date = new Date()): string {
+  const ms = parseTs(iso);
+  if (ms === null) return EM;
+  const d = new Date(ms);
+  return d.getFullYear() === now.getFullYear() ? DAY_SHORT_FMT.format(d) : DAY_FMT.format(d);
+}

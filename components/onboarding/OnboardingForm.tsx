@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Brand, Button, ErrorNote, Field, inputClass, Panel } from "@/components/ui";
-import { UserChip } from "@/components/UserChip";
-import { ApiError, getProfile, getVendors, upsertProfile, upsertVendors } from "@/lib/api";
-import { parseTs, toLocalInput, toOffsetIso } from "@/lib/format";
-import type { Availability, Prefs, Track, Vendor } from "@/lib/types";
+import { fromSlots, toSlots, type Slot } from "@/components/profile/availability";
+import { AvailabilityEditor } from "@/components/profile/AvailabilityEditor";
+import { Button, ErrorNote, Field, inputClass, Panel } from "@/components/ui";
+import { getProfile, getVendors, upsertProfile, upsertVendors } from "@/lib/api";
+import { describeError } from "@/lib/format";
+import { COHORTS, DEFAULT_CALLER_NAME, type Prefs, type Track, type Vendor } from "@/lib/types";
 
 // The demo roster. Phones stay blank here and are typed in through this form, never committed.
 const DEFAULT_VENDORS: Vendor[] = [
@@ -21,26 +21,6 @@ const DEFAULT_VENDORS: Vendor[] = [
 
 const TRACKS: Track[] = ["quote", "schedule", "negotiate"];
 
-type Slot = { start: string; end: string };
-
-function toSlots(avail: Availability[] | undefined): Slot[] {
-  if (!Array.isArray(avail)) return [];
-  return avail.map((a) => {
-    const s = parseTs(a.start);
-    const e = parseTs(a.end);
-    return {
-      start: s === null ? "" : toLocalInput(new Date(s)),
-      end: e === null ? "" : toLocalInput(new Date(e)),
-    };
-  });
-}
-
-function fromSlots(slots: Slot[]): Availability[] {
-  return slots
-    .filter((s) => s.start && s.end)
-    .map((s) => ({ start: toOffsetIso(new Date(s.start)), end: toOffsetIso(new Date(s.end)) }));
-}
-
 function mergeRoster(fromApi: Vendor[]): Vendor[] {
   if (fromApi.length === 0) return DEFAULT_VENDORS.map((v) => ({ ...v }));
   const rows = fromApi.map((v) => ({ ...v, phone: v.phone ?? "", is_demo: Boolean(v.is_demo) }));
@@ -51,18 +31,35 @@ function mergeRoster(fromApi: Vendor[]): Vendor[] {
   return rows;
 }
 
-function describe(e: unknown): string {
-  if (e instanceof ApiError) return e.message;
-  if (e instanceof Error) return e.message;
-  return String(e);
+/** The three-step indicator from the prototype's auth sheets. */
+function Progress({ step }: { step: 0 | 1 | 2 }) {
+  const steps = ["Profile", "Roster", "Ready"];
+  return (
+    <ol className="flex items-center gap-3 font-mono text-xs" aria-label="Setup progress">
+      {steps.map((label, i) => (
+        <li key={label} className="flex items-center gap-2">
+          {i > 0 ? <span className="h-px w-6 bg-line" aria-hidden="true" /> : null}
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              i < step ? "bg-fg" : i === step ? "bg-mint shadow-[0_0_0_4px_rgba(134,247,226,0.3)]" : "border border-dim"
+            }`}
+            aria-hidden="true"
+          />
+          <span className={i === step ? "font-semibold text-fg" : i < step ? "text-muted" : "text-dim"} aria-current={i === step ? "step" : undefined}>
+            {label}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 export function OnboardingForm() {
-  const router = useRouter();
   const [loaded, setLoaded] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [cohort, setCohort] = useState("student");
+  const [callerName, setCallerName] = useState("");
   const [budget, setBudget] = useState<string>("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [otherPrefs, setOtherPrefs] = useState<Prefs>({});
@@ -70,6 +67,7 @@ export function OnboardingForm() {
   const [loadNote, setLoadNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,15 +80,16 @@ export function OnboardingForm() {
         setPhone(prof.phone ?? "");
         setCohort(prof.cohort || "student");
         const prefs = prof.prefs ?? {};
-        const { budget_ceiling_usd, availability, ...rest } = prefs;
+        const { budget_ceiling_usd, availability, caller_name, ...rest } = prefs;
         setBudget(budget_ceiling_usd === null || budget_ceiling_usd === undefined ? "" : String(budget_ceiling_usd));
         setSlots(toSlots(availability));
+        setCallerName(typeof caller_name === "string" ? caller_name : "");
         setOtherPrefs(rest);
       } else if (p.status === "rejected") {
-        notes.push(`profile not loaded (${describe(p.reason)})`);
+        notes.push(`profile not loaded (${describeError(p.reason)})`);
       }
       if (v.status === "fulfilled") setVendors(mergeRoster(Array.isArray(v.value) ? v.value : []));
-      else notes.push(`vendors not loaded (${describe(v.reason)}); showing the demo defaults`);
+      else notes.push(`vendors not loaded (${describeError(v.reason)}); showing the demo defaults`);
       setLoadNote(notes.length ? notes.join(" · ") : null);
       setLoaded(true);
     });
@@ -107,9 +106,6 @@ export function OnboardingForm() {
 
   const removeVendor = (i: number) => setVendors((rows) => rows.filter((_, idx) => idx !== i));
 
-  const updateSlot = (i: number, patch: Partial<Slot>) =>
-    setSlots((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -121,6 +117,7 @@ export function OnboardingForm() {
         ...otherPrefs,
         budget_ceiling_usd: budgetNum !== null && Number.isFinite(budgetNum) ? budgetNum : null,
         availability: fromSlots(slots),
+        caller_name: callerName.trim() || null,
       };
       await upsertProfile({
         display_name: displayName.trim() || null,
@@ -138,56 +135,101 @@ export function OnboardingForm() {
           is_demo: Boolean(v.is_demo),
         }));
       await upsertVendors(roster);
-      router.push("/");
+      setSaved(true);
     } catch (err) {
-      setError(describe(err));
+      setError(describeError(err));
+    } finally {
       setBusy(false);
     }
   };
 
+  // ready.html: the post-save confirmation.
+  if (saved) {
+    return (
+      <main className="mx-auto w-full max-w-xl flex-1 px-4 py-12 sm:px-6">
+        <Progress step={2} />
+        <div className="mt-8 grid h-16 w-16 place-items-center rounded-full bg-mint font-display text-2xl text-bg" aria-hidden="true">
+          ✓
+        </div>
+        <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight sm:text-4xl">You&rsquo;re set</h1>
+        <p className="mt-3 text-muted">
+          Your profile and roster are saved. Tell Dormammu what you need handled and it starts calling. It says it is an
+          AI before anything else, on every call.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Link href="/" className="rounded-full bg-mint px-5 py-3 text-base font-medium text-bg hover:bg-white">
+            Open Dormammu
+          </Link>
+          <button type="button" onClick={() => setSaved(false)} className="text-sm text-muted hover:text-fg">
+            Edit again
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
-      <header className="mb-8 flex items-center justify-between gap-4">
-        <Brand />
-        <div className="flex items-center gap-4">
-          <Link href="/" className="font-mono text-xs text-muted hover:text-fg">
-            back
-          </Link>
-          <UserChip />
-        </div>
-      </header>
+      <Progress step={0} />
 
-      <form onSubmit={save} className="space-y-8">
+      <form onSubmit={save} className="mt-6 space-y-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Who is calling, and who gets called</h1>
-          <p className="mt-1 text-sm text-muted">
-            Phone numbers live only in your roster table. They never go into git, and the UI masks them.
+          <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Set up your profile</h1>
+          <p className="mt-2 text-muted">
+            This is what the agent knows about you when it calls. Your profile decides which discounts it asks for, and
+            it only claims what you tell it here. Phone numbers live only in your roster table; they never go into git,
+            and the UI masks them.
           </p>
           {loadNote ? <p className="mt-2 font-mono text-xs text-warn">{loadNote}</p> : null}
           {!loaded ? <p className="mt-2 font-mono text-xs text-dim">loading…</p> : null}
         </div>
 
         <Panel className="space-y-5 p-5">
-          <h2 className="font-mono text-xs uppercase tracking-widest text-muted">Profile</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="display name">
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputClass} />
+          <h2 className="font-mono text-xs uppercase tracking-widest text-teal">Profile</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="name the agent calls on behalf of">
+              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputClass} autoComplete="name" />
             </Field>
             <Field label="your phone" hint="for transfers and callbacks">
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+1 415 555 0100"
-                className={inputClass}
+                autoComplete="tel"
+                className={`${inputClass} font-mono`}
               />
             </Field>
-            <Field label="cohort">
-              <select value={cohort} onChange={(e) => setCohort(e.target.value)} className={inputClass}>
-                <option value="student">student</option>
-              </select>
-            </Field>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+
+          <fieldset>
+            <legend className="mb-2 block font-mono text-xs uppercase tracking-wide text-muted">which of these describes you?</legend>
+            <div className="flex flex-wrap gap-2">
+              {COHORTS.map((c) => (
+                <label key={c.key} className="relative">
+                  <input
+                    type="radio"
+                    name="cohort"
+                    value={c.key}
+                    checked={cohort === c.key}
+                    onChange={() => setCohort(c.key)}
+                    className="peer absolute inset-0 cursor-pointer opacity-0"
+                  />
+                  <span className="block rounded-full border border-line px-4 py-2 text-sm text-muted transition peer-checked:border-fg peer-checked:bg-fg peer-checked:text-bg peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-mint">
+                    {c.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-dim">
+              Only the student cohort ships today. On every call the agent asks for: {COHORTS[0].asks.join(", ")}. Proof vendors may
+              want: {COHORTS[0].proof}.
+            </p>
+          </fieldset>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
+              <input value={callerName} onChange={(e) => setCallerName(e.target.value)} placeholder={DEFAULT_CALLER_NAME} className={inputClass} />
+            </Field>
             <Field label="budget ceiling (usd)">
               <input
                 type="number"
@@ -200,53 +242,13 @@ export function OnboardingForm() {
               />
             </Field>
           </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-xs uppercase tracking-wide text-muted">availability</span>
-              <button
-                type="button"
-                onClick={() => setSlots((s) => [...s, { start: "", end: "" }])}
-                className="text-xs text-accent hover:underline"
-              >
-                + add window
-              </button>
-            </div>
-            {slots.length === 0 ? (
-              <p className="text-xs text-dim">No windows yet. The scheduling track uses these to pick a slot.</p>
-            ) : (
-              <ul className="space-y-2">
-                {slots.map((s, i) => (
-                  <li key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
-                    <input
-                      type="datetime-local"
-                      value={s.start}
-                      onChange={(e) => updateSlot(i, { start: e.target.value })}
-                      className={`${inputClass} font-mono`}
-                    />
-                    <input
-                      type="datetime-local"
-                      value={s.end}
-                      onChange={(e) => updateSlot(i, { end: e.target.value })}
-                      className={`${inputClass} font-mono`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setSlots((rows) => rows.filter((_, idx) => idx !== i))}
-                      className="px-2 text-xs text-dim hover:text-bad"
-                      aria-label="remove window"
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+
+          <AvailabilityEditor slots={slots} onChange={setSlots} />
         </Panel>
 
         <Panel className="space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-muted">Roster</h2>
+            <h2 className="font-mono text-xs uppercase tracking-widest text-teal">Roster</h2>
             <button type="button" onClick={addVendor} className="text-xs text-accent hover:underline">
               + add row
             </button>
@@ -270,16 +272,23 @@ export function OnboardingForm() {
                       <input
                         value={v.key}
                         onChange={(e) => updateVendor(i, { key: e.target.value })}
+                        aria-label="vendor key"
                         className={`${inputClass} font-mono`}
                       />
                     </td>
                     <td className="py-1.5 pr-2">
-                      <input value={v.name} onChange={(e) => updateVendor(i, { name: e.target.value })} className={inputClass} />
+                      <input
+                        value={v.name}
+                        onChange={(e) => updateVendor(i, { name: e.target.value })}
+                        aria-label="vendor name"
+                        className={inputClass}
+                      />
                     </td>
                     <td className="py-1.5 pr-2">
                       <select
                         value={v.track}
                         onChange={(e) => updateVendor(i, { track: e.target.value as Track })}
+                        aria-label="track"
                         className={inputClass}
                       >
                         {TRACKS.map((t) => (
@@ -295,6 +304,7 @@ export function OnboardingForm() {
                         onChange={(e) => updateVendor(i, { phone: e.target.value })}
                         placeholder="+1…"
                         autoComplete="off"
+                        aria-label="vendor phone"
                         className={`${inputClass} font-mono`}
                       />
                     </td>
@@ -303,6 +313,7 @@ export function OnboardingForm() {
                         type="checkbox"
                         checked={v.is_demo}
                         onChange={(e) => updateVendor(i, { is_demo: e.target.checked })}
+                        aria-label="demo vendor"
                         className="h-4 w-4 accent-[var(--color-accent)]"
                       />
                     </td>
@@ -322,15 +333,15 @@ export function OnboardingForm() {
             </table>
           </div>
           <p className="text-xs text-dim">
-            Only rows in this table are dialable. The router picks by key and never sees a number. Today
-            every number here belongs to someone in the room.
+            Only rows in this table are dialable. The router picks by key and never sees a number. Today every number
+            here belongs to someone in the room.
           </p>
         </Panel>
 
         <ErrorNote message={error} />
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={busy}>
-            {busy ? "saving…" : "Save and continue"}
+          <Button type="submit" disabled={busy} variant="mint">
+            {busy ? "saving…" : "Finish setup"}
           </Button>
           <Link href="/" className="text-xs text-dim hover:text-fg">
             skip

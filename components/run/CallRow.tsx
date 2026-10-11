@@ -1,3 +1,6 @@
+import Link from "next/link";
+
+import { callHref } from "@/components/calls/summary";
 import { OutcomeCell } from "@/components/run/OutcomeCell";
 import { StateMeter, StateWord } from "@/components/run/StateMeter";
 import { Transcript } from "@/components/run/Transcript";
@@ -35,7 +38,13 @@ export function CallRow({ call, serverNow, best }: { call: Call; serverNow: numb
     <li id={`call-${call.id}`} className={`px-4 py-3 transition-colors duration-500 ${rowTone}`}>
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,11rem)_auto_8.5rem_3.5rem_minmax(0,1fr)_auto]">
         <div className="min-w-0">
-          <div className={`truncate text-sm font-medium ${failed ? "text-bad/80" : "text-fg"}`}>{call.target_name}</div>
+          <Link
+            href={callHref(call)}
+            className={`block truncate font-display text-base font-semibold tracking-tight hover:text-mint ${failed ? "text-bad/80" : "text-fg"}`}
+            title="Open this call"
+          >
+            {call.target_name}
+          </Link>
           <div className="tnum truncate font-mono text-[11px] text-dim">
             {maskPhone(call.target_phone)}
             <span className="mx-1">·</span>
