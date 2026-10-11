@@ -123,3 +123,71 @@ async def test_store_failure_still_reaches_sink(sink):
     assert len(sink) == 1
     assert sink[0][1][0]["type"] == "ledger_written"
     assert sink[0][1][0]["run_id"] == "r9"
+
+
+# -- call context for the Keewano copy ----------------------------------------------------------
+
+
+class ContextStore(FakeStore):
+    def __init__(self, call_row=None, fail=False) -> None:
+        super().__init__()
+        self.call_row = call_row
+        self.fail = fail
+        self.lookups: list[str] = []
+
+    def get_call(self, call_id):
+        self.lookups.append(call_id)
+        if self.fail:
+            raise RuntimeError("postgrest down")
+        return self.call_row
+
+
+async def _drain():
+    if event_log._TASKS:
+        await asyncio.gather(*list(event_log._TASKS), return_exceptions=True)
+
+
+async def test_call_scoped_event_gets_call_context_for_keewano_only(sink):
+    store = ContextStore({"id": "c1", "track": "quote", "vendor_key": "comcast", "simulated": 0})
+    data = {"termination_type": "completed", "duration_seconds": 90}
+    row = event_log.log_event(store, USER, "call_terminated", data, run_id="r1", call_id="c1")
+    await _drain()
+    assert store.lookups == ["c1"]
+    assert row["data"] == data  # the stored row is exactly what the caller passed
+    assert store.events[0]["data"] == data
+    (sent,) = sink
+    assert sent[1][0]["data"] == {**data, "track": "quote", "vendor_key": "comcast", "simulated": 0}
+    assert sent[1][0]["call_id"] == "c1"
+
+
+async def test_no_lookup_when_event_already_has_call_context(sink):
+    store = ContextStore({"id": "c1", "track": "quote", "vendor_key": "comcast", "simulated": False})
+    data = {"track": "quote", "vendor_key": "comcast", "simulated": False, "dial_call_id": "d1"}
+    event_log.log_event(store, USER, "call_dispatched", data, call_id="c1")
+    await _drain()
+    assert store.lookups == []
+    assert len(sink) == 1 and sink[0][1][0]["data"] == data
+
+
+async def test_run_scoped_event_never_looks_up_a_call(sink):
+    store = ContextStore({"id": "c1", "track": "quote"})
+    event_log.log_event(store, USER, "run_aggregated", {"multiplier": 2.5}, run_id="r1")
+    await _drain()
+    assert store.lookups == []
+    assert len(sink) == 1
+
+
+async def test_call_context_lookup_failure_still_sends(sink):
+    store = ContextStore(fail=True)
+    event_log.log_event(store, USER, "call_connected", {"track": "quote"}, call_id="c1")
+    await _drain()
+    assert len(sink) == 1 and sink[0][1][0]["data"] == {"track": "quote"}
+    assert not event_log._TASKS
+
+
+def test_with_call_context_fills_only_missing_fields():
+    event = {"type": "call_terminated", "call_id": "c1", "data": {"track": "schedule", "duration_seconds": 5}}
+    out = event_log.with_call_context(event, {"track": "quote", "vendor_key": "v", "simulated": True, "id": "c1"})
+    assert out["data"] == {"track": "schedule", "duration_seconds": 5, "vendor_key": "v", "simulated": True}
+    assert event["data"] == {"track": "schedule", "duration_seconds": 5}
+    assert event_log.with_call_context(event, None) is event
