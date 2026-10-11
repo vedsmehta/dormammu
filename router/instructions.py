@@ -11,6 +11,11 @@ move on"):
 Every instruction ends with SUMMARY_CLOSER, the spoken recap the extractor prefers (§4.8).
 Nothing here is ever None or "undefined" in the output: optional pieces are omitted, not interpolated.
 The vendor's phone number is dialed by dispatch and never appears in the instruction.
+
+The cohort asks are per track (router.cohorts.cohort_asks). On the negotiate track the opening comes from
+one of the negotiation_flow.md §5 strategy variants, chosen deterministically by
+router.negotiation.choose_strategy from the objective, the prior context and the vendor row; strategy_for()
+exposes the same choice (key, label, reason) for logging.
 """
 
 from __future__ import annotations
@@ -19,8 +24,8 @@ import os
 from datetime import datetime
 from typing import Any
 
-from router.cohorts import cohort_for
-from router.negotiation import negotiation_lines
+from router.cohorts import ask_line, cohort_for
+from router.negotiation import STRATEGIES, choose_strategy, negotiation_lines
 
 DEFAULT_CALLER_NAME = "Alex"
 
@@ -133,9 +138,15 @@ def _money(value: Any) -> str | None:
 
 def _quote_lines(prefs: dict) -> list[str]:
     lines = [
-        "Say what the job is in one sentence, then ask what that would run all-in.",
-        "Ask if that's flat or hourly, and if anything's extra on top.",
-        "Ask what dates they have open.",
+        (
+            "Say what the job is in one sentence, with the bedroom count, where it's going and the date from your "
+            "objective, then ask what that would run all-in."
+        ),
+        (
+            "Ask if that's flat or hourly, whether stairs or a long carry add anything, whether packing is extra, "
+            "and what deposit they'd want."
+        ),
+        "Ask what dates they have open around the move date.",
     ]
     budget = _money(prefs.get("budget_ceiling_usd"))
     if budget:
@@ -163,26 +174,39 @@ def _schedule_lines(prefs: dict, display_name: str) -> list[str]:
     ]
 
 
-def _negotiate_lines(display_name: str, context_numbers: str | None) -> list[str]:
-    if display_name:
+def strategy_for(plan: dict, vendor: dict, prior_context: str | None) -> dict:
+    """{"key", "label", "reason"} for a negotiate call: the same choice build() makes, exposed for logging."""
+    plan = plan or {}
+    key, reason = choose_strategy(_text(plan.get("objective")), _text(prior_context) or None, vendor or {})
+    return {"key": key, "label": STRATEGIES[key]["label"], "reason": reason}
+
+
+def _negotiate_lines(display_name: str, context_numbers: str | None, strategy: dict) -> list[str]:
+    under = f"under the name {display_name}" if display_name else "under the client's name"
+    if strategy["key"] == "new_service":
+        first = (
+            f"Say you're setting up new internet service at the client's new address, {under}. If they need an "
+            "address detail you don't have, say you'll check and call back."
+        )
+    elif display_name:
         first = f"Say you're calling about the account under the name {display_name} and you're going over the bill."
     else:
         first = (
             "Say you're calling about the client's account and you're going over the bill. If they need an "
             "account detail you don't have, say you'll check and call back."
         )
-    return [first, *negotiation_lines(context_numbers)]
+    lines = negotiation_lines(context_numbers, strategy["key"])
+    lines[0] = f"{lines[0]} Why: {strategy['reason']}."
+    return [first, *lines]
 
 
-def _cohort_lines(cohort: dict, objective: str) -> list[str]:
+def _cohort_lines(cohort: dict, objective: str, track: str) -> list[str]:
     label = _text(cohort.get("label")) or "client"
     proof = _text(cohort.get("proof"))
-    asks = [_text(a) for a in cohort.get("asks") or [] if _text(a)]
     line = f"The client is a {label}" + (f" ({proof})." if proof else ".")
-    if asks:
-        ask_line = "Ask for: " + ", ".join(asks) + "."
-        if ask_line not in objective:
-            line += " " + ask_line
+    asks = ask_line(cohort, track)
+    if asks and "Ask for:" not in objective:
+        line += " " + asks
     line += " Only claim that; never any other discount category."
     return [line]
 
@@ -229,15 +253,19 @@ def build(plan: dict, vendor: dict, profile: dict | None, prior_context: str | N
     if context:
         lines.append(f"Right after that, bring up last time in one sentence: {context}")
     lines.append(f"What you're calling about: {objective}")
-    lines.append(f"How to run this {TRACK_LABELS[track]} call:")
+    label = TRACK_LABELS[track]
     if track == "quote":
         steps = _quote_lines(prefs)
     elif track == "schedule":
         steps = _schedule_lines(prefs, display_name)
     else:
-        steps = _negotiate_lines(display_name, context or None)
+        strategy = strategy_for(plan, vendor, context or None)
+        if strategy["key"] == "new_service":
+            label = "new-service"
+        steps = _negotiate_lines(display_name, context or None, strategy)
+    lines.append(f"How to run this {label} call:")
     lines.extend(f"- {step}" for step in steps)
-    lines.extend(_cohort_lines(cohort, objective))
+    lines.extend(_cohort_lines(cohort, objective, track))
     lines.append("How to sound:")
     lines.extend(f"- {rule}" for rule in VOICE_RULES)
     lines.append(_client_details(display_name, phone))

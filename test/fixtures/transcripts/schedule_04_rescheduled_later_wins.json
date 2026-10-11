@@ -1,0 +1,57 @@
+{
+  "id": "schedule_04_rescheduled_later_wins",
+  "track": "schedule",
+  "scenario": "first slot withdrawn, later slot wins",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Willow Physical Therapy?"
+    },
+    {
+      "speaker": "user",
+      "text": "Willow PT, this is Anita."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Anita. I'm an AI assistant calling for Vedant. He needs an initial PT evaluation, weekday mornings."
+    },
+    {
+      "speaker": "user",
+      "text": "Wednesday at 10 with Dr. Patel?"
+    },
+    {
+      "speaker": "agent",
+      "text": "Wednesday at 10 works. Book that under Vedant, please."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay, one sec... oh, hang on, Dr. Patel is out Wednesday, I'm sorry, that slot shouldn't be showing. Can he do Friday at 9?"
+    },
+    {
+      "speaker": "agent",
+      "text": "Friday at 9 is fine."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay, Friday the 16th at 9 a.m., Vedant, initial eval. Confirmed. Have him bring the referral."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Friday October 16th at 9 a.m. with Dr. Patel, bringing the referral. Thanks Anita, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-10-16T09:00:00-07:00",
+    "confirmed": true,
+    "note": null
+  },
+  "notes": "Wednesday 10 a.m. was offered and withdrawn; Friday 9 a.m. is the booking. The later time wins."
+}

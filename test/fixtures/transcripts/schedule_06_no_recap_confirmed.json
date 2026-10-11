@@ -1,0 +1,49 @@
+{
+  "id": "schedule_06_no_recap_confirmed",
+  "track": "schedule",
+  "scenario": "confirmed next Tuesday, agent skipped the recap",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": false,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Palo Alto Vision Center?"
+    },
+    {
+      "speaker": "user",
+      "text": "Vision Center, this is Eli."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Eli. I'm an AI assistant calling for Vedant. He needs an eye exam, weekday afternoons next week."
+    },
+    {
+      "speaker": "user",
+      "text": "Next week, afternoons... Tuesday at 4?"
+    },
+    {
+      "speaker": "agent",
+      "text": "Tuesday at 4 works. Under Vedant, please."
+    },
+    {
+      "speaker": "user",
+      "text": "Tuesday the 20th at 4 p.m., Vedant. Booked. Bring his current glasses."
+    },
+    {
+      "speaker": "agent",
+      "text": "Will do. Thanks Eli, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Take care."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-10-20T16:00:00-07:00",
+    "confirmed": true,
+    "note": null
+  },
+  "notes": "Confirmed booking with no recap line. The body alone carries the slot."
+}

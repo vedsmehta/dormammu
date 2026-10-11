@@ -1,0 +1,74 @@
+{
+  "id": "negotiate_05_promo_reverts",
+  "track": "negotiate",
+  "scenario": "promo that steps up above today's rate, declined",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Summit Fiber?"
+    },
+    {
+      "speaker": "user",
+      "text": "Summit Fiber, this is Taylor."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Taylor. I'm an AI assistant calling for Vedant. I'm calling about the account under his name and going over the bill."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay, I've got it up."
+    },
+    {
+      "speaker": "agent",
+      "text": "The monthly cost is higher than what's advertised right now. What promotions or adjustments are available on it?"
+    },
+    {
+      "speaker": "user",
+      "text": "You're at $89.99. I've got a promo: $15 off for six months, but at the end of the six months the plan steps up to the current list price, which is $95."
+    },
+    {
+      "speaker": "agent",
+      "text": "So $74.99 for six months, then $95 after, which is more than today?"
+    },
+    {
+      "speaker": "user",
+      "text": "That's right. It's the standard promo rollout."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is that the best rate available on the account? Anything that doesn't go up afterward?"
+    },
+    {
+      "speaker": "user",
+      "text": "That's the only one I've got."
+    },
+    {
+      "speaker": "agent",
+      "text": "I'd have to check with him on that, since it ends up higher than today. Let's leave the plan as is for now."
+    },
+    {
+      "speaker": "user",
+      "text": "No problem. It'll be there if he changes his mind."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, the only offer is $15 off for six months then $95 a month after, and we're leaving the plan unchanged for now. Thanks Taylor, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "none",
+    "saved_usd": null,
+    "effective_date": null,
+    "note": "no outcome stated"
+  },
+  "notes": "The promo reverts above today's price, so the agent declined it. Nothing changed: action none, no saving."
+}

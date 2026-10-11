@@ -277,3 +277,90 @@ def test_due_ledger(backend):
 
     listed = store.list_ledger(user_id)
     assert [r["label"] for r in listed] == ["Fiber Co promo", "Movers deposit", "undated"]
+
+
+def test_user_call_history_and_counts(backend):
+    """list_calls_for_user, count_events_by_type, count_calls_by_state, count_calls_by_simulated and
+    real_dial_calls: same answers from both backends (GET /calls, /evidence, /accuracy depend on them)."""
+    from server.store import REAL_CALL_COLUMNS
+
+    store, user_id = backend
+    vendors = _vendors(store, user_id)
+    movers, isp = vendors[0], vendors[1]
+    if movers["key"] != "movers_a":
+        movers, isp = isp, movers
+    tag = uuid.uuid4().hex[:8]
+
+    run_a = store.create_run(user_id, "first request")
+    run_b = store.create_run(user_id, "second request")
+    rows = store.insert_calls(
+        [
+            _call_row(
+                run_a["id"],
+                movers,
+                started_at="2026-10-01T00:00:00+00:00",
+                ended_at="2026-10-01T00:01:00+00:00",
+                dial_call_id=f"dc-{tag}-1",
+                state="done",
+                state_rank=6,
+                termination_type="completed",
+                duration_seconds=40.0,
+            ),
+            _call_row(
+                run_a["id"],
+                isp,
+                started_at="2026-10-02T00:00:00+00:00",
+                simulated=True,
+                state="done",
+                state_rank=6,
+            ),
+            _call_row(
+                run_b["id"],
+                movers,
+                started_at="2026-10-03T00:00:00+00:00",
+                dial_call_id=f"dc-{tag}-2",
+                state="failed",
+                state_rank=6,
+                termination_type="voicemail",
+            ),
+            _call_row(run_b["id"], isp, started_at="2026-10-04T00:00:00+00:00"),
+        ]
+    )
+    done_real, done_sim, failed_real, planned = rows
+    store.insert_event(user_id, "run_requested", {"request": "first request"}, run_id=run_a["id"])
+    store.insert_event(user_id, "call_dispatched", {}, run_id=run_a["id"], call_id=done_real["id"])
+    store.insert_event(user_id, "call_dispatched", {}, run_id=run_a["id"], call_id=done_sim["id"])
+
+    listed = store.list_calls_for_user(user_id)
+    assert [c["id"] for c in listed] == [planned["id"], failed_real["id"], done_sim["id"], done_real["id"]]
+    assert [c["request"] for c in listed] == ["second request"] * 2 + ["first request"] * 2
+    assert "runs" not in listed[0]
+    assert listed[0]["simulated"] is False and listed[2]["simulated"] is True
+    assert listed[-1]["dial_call_id"] == f"dc-{tag}-1" and listed[-1]["target_phone"] == movers["phone"]
+    page = store.list_calls_for_user(user_id, limit=2, offset=1)
+    assert [c["id"] for c in page] == [failed_real["id"], done_sim["id"]]
+    assert store.list_calls_for_user(user_id, limit=1, offset=3)[0]["id"] == done_real["id"]
+    assert store.list_calls_for_user(user_id, limit=0) == []
+    assert store.list_calls_for_user(user_id, offset=50) == []
+    assert store.list_calls_for_user(str(uuid.uuid4())) == []
+
+    assert store.count_events_by_type(user_id) == {"call_dispatched": 2, "run_requested": 1}
+    assert store.count_events_by_type(str(uuid.uuid4())) == {}
+    assert store.count_calls_by_state(user_id) == {"done": 2, "failed": 1, "planned": 1}
+    assert store.count_calls_by_state(str(uuid.uuid4())) == {}
+    assert store.count_calls_by_simulated(user_id) == {"real_dial": 2, "simulated": 1, "undialed": 1}
+    assert store.count_calls_by_simulated(str(uuid.uuid4())) == {
+        "real_dial": 0,
+        "simulated": 0,
+        "undialed": 0,
+    }
+
+    real = store.real_dial_calls(user_id)
+    assert [r["id"] for r in real] == [failed_real["id"], done_real["id"]]
+    assert all(set(r) == set(REAL_CALL_COLUMNS) for r in real)
+    assert real[0]["termination_type"] == "voicemail" and real[0]["state"] == "failed"
+    assert real[1]["dial_call_id"] == f"dc-{tag}-1" and float(real[1]["duration_seconds"]) == 40.0
+    assert real[1]["target_name"] == movers["name"] and real[1]["track"] == "quote"
+    assert str(real[1]["ended_at"]).startswith("2026-10-01T00:01:00")
+    assert [r["id"] for r in store.real_dial_calls(user_id, limit=1)] == [failed_real["id"]]
+    assert store.real_dial_calls(str(uuid.uuid4())) == []

@@ -123,6 +123,32 @@ class Store(Protocol):
     def insert_ledger(self, rows: list[dict]) -> list[dict]: ...
     def list_ledger(self, user_id: str) -> list[dict]: ...
     def due_ledger(self, user_id: str, as_of: str) -> list[dict]: ...
+    # Evidence and history (GET /calls, /evidence, /accuracy). All scoped to the user's runs.
+    def list_calls_for_user(self, user_id: str, limit: int = 200, offset: int = 0) -> list[dict]: ...
+    # calls rows newest first, each with the run's request text as "request"
+    def count_events_by_type(self, user_id: str) -> dict[str, int]: ...
+    def count_calls_by_state(self, user_id: str) -> dict[str, int]: ...
+    def count_calls_by_simulated(self, user_id: str) -> dict[str, int]: ...
+    # {"real_dial": simulated false with a dial_call_id, "simulated": simulated true,
+    #  "undialed": simulated false and no dial_call_id}
+    def real_dial_calls(self, user_id: str, limit: int = 20) -> list[dict]: ...
+
+    # dial_call_id not null and simulated false, newest first; columns REAL_CALL_COLUMNS
+
+
+REAL_CALL_COLUMNS = (
+    "id",
+    "run_id",
+    "track",
+    "target_name",
+    "target_phone",
+    "dial_call_id",
+    "state",
+    "termination_type",
+    "duration_seconds",
+    "started_at",
+    "ended_at",
+)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -499,6 +525,66 @@ class SqliteStore:
             [user_id, _date_only(as_of)],
         )
 
+    # -- evidence and history --
+
+    def list_calls_for_user(self, user_id: str, limit: int = 200, offset: int = 0) -> list[dict]:
+        return self._many(
+            "calls",
+            "select calls.*, runs.request as request from calls join runs on runs.id = calls.run_id "
+            "where runs.user_id = ? order by calls.started_at desc, calls.rowid desc limit ? offset ?",
+            [user_id, max(0, int(limit)), max(0, int(offset))],
+        )
+
+    def count_events_by_type(self, user_id: str) -> dict[str, int]:
+        with self._lock:
+            rows = self._conn.execute(
+                "select type, count(*) as n from events where user_id = ? group by type order by type",
+                [user_id],
+            ).fetchall()
+        return {r["type"]: int(r["n"]) for r in rows}
+
+    def count_calls_by_state(self, user_id: str) -> dict[str, int]:
+        with self._lock:
+            rows = self._conn.execute(
+                "select calls.state as state, count(*) as n from calls join runs on runs.id = calls.run_id "
+                "where runs.user_id = ? group by calls.state order by calls.state",
+                [user_id],
+            ).fetchall()
+        return {r["state"]: int(r["n"]) for r in rows}
+
+    def count_calls_by_simulated(self, user_id: str) -> dict[str, int]:
+        with self._lock:
+            rows = self._conn.execute(
+                "select calls.simulated as simulated, (calls.dial_call_id is not null) as dialed, "
+                "count(*) as n from calls join runs on runs.id = calls.run_id "
+                "where runs.user_id = ? group by 1, 2",
+                [user_id],
+            ).fetchall()
+        return _simulated_buckets((bool(r["simulated"]), bool(r["dialed"]), int(r["n"])) for r in rows)
+
+    def real_dial_calls(self, user_id: str, limit: int = 20) -> list[dict]:
+        cols = ", ".join(f"calls.{c}" for c in REAL_CALL_COLUMNS)
+        return self._many(
+            "calls",
+            f"select {cols} from calls join runs on runs.id = calls.run_id "
+            "where runs.user_id = ? and calls.dial_call_id is not null and calls.simulated = 0 "
+            "order by calls.started_at desc, calls.rowid desc limit ?",
+            [user_id, max(0, int(limit))],
+        )
+
+
+def _simulated_buckets(triples) -> dict[str, int]:
+    """(simulated, dialed, n) triples -> the three evidence buckets. Shared by both backends."""
+    out = {"real_dial": 0, "simulated": 0, "undialed": 0}
+    for simulated, dialed, n in triples:
+        if simulated:
+            out["simulated"] += n
+        elif dialed:
+            out["real_dial"] += n
+        else:
+            out["undialed"] += n
+    return out
+
 
 # ---------------------------------------------------------------------------------------------
 # Supabase (PostgREST via supabase-py)
@@ -721,6 +807,77 @@ class SupabaseStore:
             .order("created_at")
         )
         return self._rows(q.execute())
+
+    # -- evidence and history --
+    # PostgREST has no GROUP BY, so the count_* methods pull one narrow column per row (capped at
+    # COUNT_SCAN_LIMIT rows) and count in Python. Fine at hackathon scale; swap for an RPC if it grows.
+
+    COUNT_SCAN_LIMIT = 10_000
+
+    def list_calls_for_user(self, user_id: str, limit: int = 200, offset: int = 0) -> list[dict]:
+        limit, offset = max(0, int(limit)), max(0, int(offset))
+        if limit == 0:
+            return []
+        q = (
+            self._t("calls")
+            .select("*, runs!inner(user_id, request)")
+            .eq("runs.user_id", user_id)
+            .order("started_at", desc=True)
+            .range(offset, offset + limit - 1)
+        )
+        rows = self._rows(q.execute())
+        for r in rows:
+            nested = r.pop("runs", None)
+            r["request"] = nested.get("request") if isinstance(nested, dict) else None
+        return rows
+
+    def count_events_by_type(self, user_id: str) -> dict[str, int]:
+        q = self._t("events").select("type").eq("user_id", user_id).limit(self.COUNT_SCAN_LIMIT)
+        out: dict[str, int] = {}
+        for r in self._rows(q.execute()):
+            key = str(r.get("type"))
+            out[key] = out.get(key, 0) + 1
+        return dict(sorted(out.items()))
+
+    def count_calls_by_state(self, user_id: str) -> dict[str, int]:
+        q = (
+            self._t("calls")
+            .select("state, runs!inner(user_id)")
+            .eq("runs.user_id", user_id)
+            .limit(self.COUNT_SCAN_LIMIT)
+        )
+        out: dict[str, int] = {}
+        for r in self._rows(q.execute()):
+            key = str(r.get("state"))
+            out[key] = out.get(key, 0) + 1
+        return dict(sorted(out.items()))
+
+    def count_calls_by_simulated(self, user_id: str) -> dict[str, int]:
+        q = (
+            self._t("calls")
+            .select("simulated, dial_call_id, runs!inner(user_id)")
+            .eq("runs.user_id", user_id)
+            .limit(self.COUNT_SCAN_LIMIT)
+        )
+        rows = self._rows(q.execute())
+        return _simulated_buckets(
+            (bool(r.get("simulated")), r.get("dial_call_id") is not None, 1) for r in rows
+        )
+
+    def real_dial_calls(self, user_id: str, limit: int = 20) -> list[dict]:
+        q = (
+            self._t("calls")
+            .select(", ".join(REAL_CALL_COLUMNS) + ", runs!inner(user_id)")
+            .eq("runs.user_id", user_id)
+            .not_.is_("dial_call_id", "null")
+            .eq("simulated", False)
+            .order("started_at", desc=True)
+            .limit(max(0, int(limit)))
+        )
+        rows = self._rows(q.execute())
+        for r in rows:
+            r.pop("runs", None)
+        return rows
 
 
 def get_store() -> Store:

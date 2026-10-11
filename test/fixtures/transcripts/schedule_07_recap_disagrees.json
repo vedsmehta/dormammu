@@ -1,0 +1,57 @@
+{
+  "id": "schedule_07_recap_disagrees",
+  "track": "schedule",
+  "scenario": "recap names the wrong day, rep corrects after",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": true,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Peninsula Sports Medicine?"
+    },
+    {
+      "speaker": "user",
+      "text": "Peninsula Sports Med, Lauren."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Lauren. I'm an AI assistant calling for Vedant. He needs a follow-up on his knee, early mornings next week or the week after."
+    },
+    {
+      "speaker": "user",
+      "text": "Early... I've got Wednesday the 21st at 8 a.m. with Dr. Okafor."
+    },
+    {
+      "speaker": "agent",
+      "text": "That works. Book it under Vedant."
+    },
+    {
+      "speaker": "user",
+      "text": "Done. Wednesday the 21st, 8 a.m."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Thursday October 22nd at 8 a.m. with Dr. Okafor. Thanks Lauren."
+    },
+    {
+      "speaker": "user",
+      "text": "Wednesday. Wednesday the 21st, not Thursday."
+    },
+    {
+      "speaker": "agent",
+      "text": "Wednesday the 21st at 8, got it. Thanks, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-10-21T08:00:00-07:00",
+    "confirmed": true,
+    "note": null
+  },
+  "notes": "The recap says Thursday the 22nd; the rep corrects it to Wednesday the 21st. The body wins: expected is Oct 21 at 8 a.m."
+}

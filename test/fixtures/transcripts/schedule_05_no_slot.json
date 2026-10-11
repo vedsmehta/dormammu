@@ -1,0 +1,49 @@
+{
+  "id": "schedule_05_no_slot",
+  "track": "schedule",
+  "scenario": "no availability, no recap",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": false,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Bayview Dermatology?"
+    },
+    {
+      "speaker": "user",
+      "text": "Bayview Dermatology."
+    },
+    {
+      "speaker": "agent",
+      "text": "I'm an AI assistant calling for Vedant. He's looking for a new patient appointment, any weekday afternoon in the next couple of weeks."
+    },
+    {
+      "speaker": "user",
+      "text": "New patient... we're booked out through December right now. I can put him on the waitlist."
+    },
+    {
+      "speaker": "agent",
+      "text": "Nothing at all in October or November?"
+    },
+    {
+      "speaker": "user",
+      "text": "Nothing for new patients, no. Waitlist is the best I can do, and I'd need him to call himself for that."
+    },
+    {
+      "speaker": "agent",
+      "text": "Okay, I'll pass that along. Thanks, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": null,
+    "confirmed": false,
+    "note": "no slot stated"
+  },
+  "notes": "No slot offered and the agent ended without a recap. 'December' is not an appointment."
+}

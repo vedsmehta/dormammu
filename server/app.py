@@ -12,8 +12,11 @@ import contextlib
 import hmac
 import json
 import os
+import platform
 import re
+import subprocess
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -25,16 +28,23 @@ from aggregator import extract as extract_mod
 from call import dial_client, dispatch, ingest, simulate
 from events.log import log_event
 from router import plan as planner
+from server import accuracy as accuracy_mod
 from server import store as store_mod
+from server.accuracy import accuracy_report, keewano_token_kind, mask_phone
 from server.auth import bearer_token, current_user_id, ensure_profile
 from server.schemas import JsonRpcRequest, LedgerFire, ProfileUpdate, RunCreate, SignupIn, VendorsIn
 from server.store import TERMINAL_STATES, Store
-from settings import load_env
+from settings import ROOT, load_env
 
 load_env()
 
 PREFIX = "/api/py"
 STALE_PLANNED_SECONDS = 90.0
+EVIDENCE_DIAL_TIMEOUT_SECONDS = 8.0
+EVIDENCE_RECENT_EVENTS = 30
+EVIDENCE_DATA_CHARS = 300
+ACCURACY_CALL_CAP = 500
+EVAL_REPORT_PATH: Path = ROOT / "public" / "eval-report.json"  # written by the analysis lane
 
 _store: Store | None = None
 
@@ -494,6 +504,263 @@ def get_ledger(user_id: UserId, store: StoreDep) -> list[dict]:
 @app.get(f"{PREFIX}/events")
 def get_events(user_id: UserId, store: StoreDep, limit: int = 50) -> list[dict]:
     return store.list_events(user_id, max(1, min(limit, 500)))
+
+
+# ---------------------------------------------------------------------------------------------
+# Past calls, evidence and accuracy (read-only; phones are masked before they leave the server)
+# ---------------------------------------------------------------------------------------------
+
+
+def _public_call(row: dict) -> dict:
+    out = dict(row)
+    out["target_phone"] = mask_phone(row.get("target_phone"))
+    return out
+
+
+@app.get(f"{PREFIX}/calls")
+def get_calls(user_id: UserId, store: StoreDep, limit: int = 200, offset: int = 0) -> list[dict]:
+    """The user's calls across every run, newest first, each with the run's `request`. Phones masked."""
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    return [_public_call(r) for r in store.list_calls_for_user(user_id, limit, offset)]
+
+
+def _exc_text(exc: BaseException) -> str:
+    return f"{exc.__class__.__name__}: {exc}"[:300]
+
+
+async def _dial_account_evidence() -> dict:
+    """Account limits plus the masked from-number. Errors land in "error"; the secret never leaves."""
+    out: dict[str, Any] = {
+        "configured": bool(os.environ.get("DIAL_API_KEY")),
+        "limits": None,
+        "max_call_duration_seconds": None,
+        "from_number": mask_phone(os.environ.get("DIAL_NUMBER")),
+        "numbers": [],
+        "api_keys": None,
+        "error": None,
+    }
+    if not out["configured"]:
+        out["error"] = "DIAL_API_KEY is not set"
+        return out
+    try:
+        account, numbers = await asyncio.wait_for(
+            asyncio.gather(dial_client.get_account(), dial_client.list_numbers(), return_exceptions=True),
+            timeout=EVIDENCE_DIAL_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:  # noqa: BLE001  (timeout or cancellation)
+        out["error"] = _exc_text(exc)
+        return out
+    errors: list[str] = []
+    if isinstance(account, BaseException):
+        errors.append(f"account: {_exc_text(account)}")
+    elif isinstance(account, dict):
+        out["limits"] = account.get("limits")
+        out["max_call_duration_seconds"] = account.get("maxCallDurationSeconds")
+        keys = account.get("apiKeys")
+        out["api_keys"] = len(keys) if isinstance(keys, list) else None
+    if isinstance(numbers, BaseException):
+        errors.append(f"numbers: {_exc_text(numbers)}")
+    elif isinstance(numbers, list):
+        out["numbers"] = [
+            {
+                "number": mask_phone(n.get("number")),
+                "nickname": n.get("nickname"),
+                "country": n.get("country"),
+                "setup_status": n.get("setupStatus"),
+                "calling_enabled": n.get("callingEnabled"),
+            }
+            for n in numbers
+            if isinstance(n, dict)
+        ]
+        if out["from_number"] is None and out["numbers"]:
+            out["from_number"] = out["numbers"][0]["number"]
+    out["error"] = "; ".join(errors) or None
+    return out
+
+
+def _scrub_secrets(value: Any) -> Any:
+    """Drop string values under keys that look like credentials. Belt and braces for third-party dicts."""
+    if not isinstance(value, dict):
+        return value
+    return {
+        k: v
+        for k, v in value.items()
+        if not (isinstance(v, str) and any(word in str(k).lower() for word in ("token", "secret", "key")))
+    }
+
+
+def _keewano_evidence() -> dict:
+    """Sink status without the token. events.keewano is another lane's module: every name is optional."""
+    token = os.environ.get("KEEWANO_TOKEN")
+    out: dict[str, Any] = {
+        "enabled": False,
+        "token_kind": keewano_token_kind(token),
+        "status": None,
+        "last_error": None,
+        "last_status": None,
+        "event_types": None,
+        "companion_types": None,
+        "fallback_event_type_id": None,
+        "ingress_url": None,
+        "auth_hint": None,
+    }
+    try:
+        from events.log import keewano_enabled
+
+        out["enabled"] = bool(keewano_enabled())
+    except Exception:  # noqa: BLE001
+        truthy = os.environ.get("KEEWANO_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+        out["enabled"] = truthy and bool(token)
+    try:
+        from events import keewano as kw
+    except Exception:  # noqa: BLE001
+        return out
+    status_fn = getattr(kw, "status", None)
+    if callable(status_fn):
+        try:
+            out["status"] = _scrub_secrets(status_fn())
+        except Exception as exc:  # noqa: BLE001
+            out["status"] = {"error": _exc_text(exc)}
+    out["last_error"] = getattr(kw, "last_error", None)
+    out["last_status"] = getattr(kw, "last_status", None)
+    for key, name in (
+        ("event_types", "EVENT_TYPE_IDS"),
+        ("companion_types", "COMPANION_TYPE_IDS"),
+        ("fallback_event_type_id", "FALLBACK_EVENT_TYPE_ID"),
+        ("ingress_url", "INGRESS_URL"),
+    ):
+        value = getattr(kw, name, None)
+        out[key] = dict(value) if isinstance(value, dict) else value
+    if out["token_kind"] != "project_key":
+        out["auth_hint"] = getattr(kw, "AUTH_HINT", None) or (
+            "Keewano ingest needs a Project API Key (a JWT); a kwpat- personal token only works for the MCP"
+        )
+    return out
+
+
+def _recent_events(store: Store, user_id: str) -> list[dict]:
+    out: list[dict] = []
+    for e in store.list_events(user_id, EVIDENCE_RECENT_EVENTS):
+        text = (
+            json.dumps(e.get("data"), separators=(",", ":"), default=str) if e.get("data") is not None else ""
+        )
+        out.append(
+            {
+                "id": e.get("id"),
+                "type": e.get("type"),
+                "created_at": e.get("created_at"),
+                "run_id": e.get("run_id"),
+                "call_id": e.get("call_id"),
+                "data": text[:EVIDENCE_DATA_CHARS],
+                "truncated": len(text) > EVIDENCE_DATA_CHARS,
+            }
+        )
+    return out
+
+
+def _git_short_sha() -> str | None:
+    """Short sha from git (2s budget), else Vercel's env, else None. Never raises."""
+    with contextlib.suppress(Exception):
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+        )
+        sha = result.stdout.strip()
+        if result.returncode == 0 and sha:
+            return sha
+    vercel = os.environ.get("VERCEL_GIT_COMMIT_SHA")
+    return vercel[:7] if vercel else None
+
+
+def _policy_evidence() -> dict:
+    """The product rules the demo is held to (BUILD-PLAN §8), read from the modules that enforce them."""
+    out: dict[str, Any] = {
+        "ai_disclosure": None,
+        "summary_closer": None,
+        "only_vendor_rows_dialable": True,
+        "multiplier_label": "est.",
+        "dial_overhead_seconds": getattr(aggregate_mod, "DIAL_OVERHEAD_SECONDS", None),
+        "max_calls_per_run": int(os.environ.get("MAX_CALLS_PER_RUN", "5") or 5),
+        "system_of_record": "postgres events",
+        "analysis_sink": "keewano",
+    }
+    with contextlib.suppress(Exception):
+        from router import instructions
+
+        out["ai_disclosure"] = getattr(instructions, "AI_DISCLOSURE", None)
+        out["summary_closer"] = getattr(instructions, "SUMMARY_CLOSER", None)
+    return out
+
+
+@app.get(f"{PREFIX}/evidence")
+async def get_evidence(user_id: UserId, store: StoreDep) -> dict:
+    """Everything the evidence screen shows: Dial account and real calls, Keewano sink state, the events
+    ledger, call state counts, build info. Nothing here is fabricated and no secret or full phone leaves."""
+    dial_account = await _dial_account_evidence()
+    real_calls = [_public_call(r) for r in store.real_dial_calls(user_id, 20)]
+    buckets = store.count_calls_by_simulated(user_id)
+    return {
+        "dial": {
+            "account": dial_account,
+            "real_calls": real_calls,
+            "n_real_calls": buckets.get("real_dial", 0),
+            "n_simulated_calls": buckets.get("simulated", 0),
+            "n_undialed_calls": buckets.get("undialed", 0),
+        },
+        "keewano": _keewano_evidence(),
+        "events": {"by_type": store.count_events_by_type(user_id), "recent": _recent_events(store, user_id)},
+        "calls": {"by_state": store.count_calls_by_state(user_id), "by_simulated": buckets},
+        "policy": _policy_evidence(),
+        "build": {
+            "commit": _git_short_sha(),
+            "deployed_at": None,
+            "python": platform.python_version(),
+            "store": getattr(store, "name", "sqlite"),
+        },
+        "generated_at": utcnow().isoformat(),
+    }
+
+
+def _read_eval_report() -> Any | None:
+    try:
+        with open(EVAL_REPORT_PATH, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:  # noqa: BLE001  (missing, unreadable or not JSON: the analysis lane owns it)
+        return None
+
+
+@app.get(f"{PREFIX}/accuracy")
+def get_accuracy(user_id: UserId, store: StoreDep) -> dict:
+    """Success, funnel and recap-agreement rates over the user's most recent calls (cap ACCURACY_CALL_CAP).
+
+    Top level is every call; `split.real` and `split.simulated` repeat the same report per bucket so the
+    screen can show real-dial accuracy next to fixture accuracy instead of blending them.
+    """
+    calls = store.list_calls_for_user(user_id, ACCURACY_CALL_CAP, 0)
+    report = accuracy_report(calls)
+    report["split"] = {
+        "real": accuracy_report([c for c in calls if not c.get("simulated")]),
+        "simulated": accuracy_report([c for c in calls if c.get("simulated")]),
+    }
+    report["eval"] = _read_eval_report()
+    prefixes = " or ".join(f'"{p.capitalize()}"' for p in accuracy_mod.RECAP_PREFIXES)
+    report["recap_agreement"]["definition"] = (
+        "extracted amount, saved_usd or appointment day appears in the agent's closing recap turn "
+        f"(the last agent turn opening with {prefixes})"
+    )
+    report["note"] = (
+        "Seeded and simulated calls are included and flagged: every fixture row has simulated=true, and "
+        "split.real / split.simulated report each bucket on its own. Recap agreement is a consistency check "
+        "between the extractor and the agent's spoken summary, not ground truth."
+    )
+    report["cap"] = ACCURACY_CALL_CAP
+    report["generated_at"] = utcnow().isoformat()
+    return report
 
 
 def _money(amount: Any) -> str:

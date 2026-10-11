@@ -2,12 +2,24 @@
 
 One request in, N phone calls out at the same time, one combined result back.
 
-Built at SpeedHacks (a16z speedrun, Oct 11 2026) on Dial. A lot of real-world tasks are
-bottlenecked behind a phone call: getting quotes, booking an appointment, lowering a bill. Each is
-solvable by one AI caller. The leverage is running many of them at once and aggregating.
+Built at SpeedHacks (a16z speedrun, Oct 11 2026) on Dial. The use case is one specific week: a
+Stanford student taking their first off-campus apartment for the fall, on a student budget. That
+week is a pile of phone calls nobody wants to make: three movers to compare for a 1-bedroom on a
+fixed date, an internet provider to set up at the new address, a dentist near campus to see as a
+new patient. Each call is solvable by one AI caller that identifies itself as an AI. The leverage is
+placing all of them at once and bringing the answers back into one table (docs/USE-CASE.md).
+
+The student types one sentence: "I'm moving to Palo Alto on October 25 for the school year,
+1-bedroom, handle the move, internet and a dentist." The router carries the date, the bedroom count
+and the destination into every objective, appends the student asks per track (move discount and a
+capped deposit; student rate, fee waived, no contract; new-patient slot and self-pay price), and
+dispatches. On the negotiate track the agent picks its opening from the bill-negotiation playbook
+(advertised anchor, loyalty, credible cancellation, audit, or new-service setup) and says why. Every
+completed call writes rows that the next call opens with, so the second call to a vendor starts
+from what the first one learned.
 
 ```
-"I'm moving to SF next month, handle it"
+"I'm moving to Palo Alto on October 25 for the school year, 1-bedroom, handle the move, internet and a dentist"
         │
         ▼
      ROUTER  (OpenAI, roster-constrained: emits vendor keys, never phone numbers)

@@ -1,0 +1,49 @@
+{
+  "id": "schedule_08_next_month",
+  "track": "schedule",
+  "scenario": "confirmed, date in the next month",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Cedar Family Dental?"
+    },
+    {
+      "speaker": "user",
+      "text": "Cedar Family Dental, Noor speaking."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Noor. I'm an AI assistant calling for Vedant. He needs a cleaning, weekday afternoons, whenever's earliest."
+    },
+    {
+      "speaker": "user",
+      "text": "We're pretty full. The earliest I've got for a cleaning is the third of next month at one o'clock."
+    },
+    {
+      "speaker": "agent",
+      "text": "The third at 1 p.m. is fine. Can you book it under Vedant?"
+    },
+    {
+      "speaker": "user",
+      "text": "Tuesday November 3rd, 1 p.m., Vedant. You're confirmed. We'll text a reminder the day before."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Tuesday November 3rd at 1 p.m. at Cedar Family Dental. Thanks Noor, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-11-03T13:00:00-08:00",
+    "confirmed": true,
+    "note": null
+  },
+  "notes": "'The third of next month' from an Oct 13 call is Nov 3. Pacific is on standard time by then (-08:00); the scorer accepts either offset for the same wall clock."
+}

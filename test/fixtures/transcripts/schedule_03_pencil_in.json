@@ -1,0 +1,49 @@
+{
+  "id": "schedule_03_pencil_in",
+  "track": "schedule",
+  "scenario": "penciled in, not confirmed",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Castro Dental Group?"
+    },
+    {
+      "speaker": "user",
+      "text": "Castro Dental, this is Marcus."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Marcus. I'm an AI assistant calling for Vedant. He's looking to get a cleaning next week, weekday afternoons."
+    },
+    {
+      "speaker": "user",
+      "text": "Next week... I've got Monday at 11. Afternoons are full till the week after."
+    },
+    {
+      "speaker": "agent",
+      "text": "Monday at 11 could work. Can you book it under Vedant?"
+    },
+    {
+      "speaker": "user",
+      "text": "I can pencil you in for Monday the 19th at 11, but I need him to call back and confirm with his insurance info before I lock it. Otherwise it drops off after 48 hours."
+    },
+    {
+      "speaker": "agent",
+      "text": "Understood, he'll call back. Just to confirm, penciled in for Monday October 19th at 11 a.m., not confirmed until he calls with insurance. Thanks Marcus, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Sounds good."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-10-19T11:00:00-07:00",
+    "confirmed": false,
+    "note": null
+  },
+  "notes": "A slot exists but the vendor did not confirm it. confirmed must be false."
+}

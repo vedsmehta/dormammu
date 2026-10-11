@@ -1,0 +1,69 @@
+{
+  "id": "quote_01_flat_clean",
+  "track": "quote",
+  "scenario": "flat rate, clean recap",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Bay Breeze Movers?"
+    },
+    {
+      "speaker": "user",
+      "text": "You are, this is Dana."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Dana. I'm an AI assistant calling for Vedant. He's moving a one-bedroom from Palo Alto to San Francisco on Saturday the 24th and wanted to know what that would run all-in."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay, one bedroom, Palo Alto to the city. Any stairs on either end?"
+    },
+    {
+      "speaker": "agent",
+      "text": "Third floor walk-up on the San Francisco side."
+    },
+    {
+      "speaker": "user",
+      "text": "Alright. For that we'd be at $1,450 flat. That's the truck, two movers, basic coverage, and the walk-up is already in there."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is that flat, or hourly?"
+    },
+    {
+      "speaker": "user",
+      "text": "Flat. We don't do hourly on anything over twenty miles. Packing materials are separate if you need boxes, and we take a $200 deposit to hold the date."
+    },
+    {
+      "speaker": "agent",
+      "text": "Got it. Is the 24th open?"
+    },
+    {
+      "speaker": "user",
+      "text": "It is. Morning slot's open."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Bay Breeze is $1,450 flat for the October 24th move, packing materials extra, $200 deposit to hold it. Thanks Dana, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye now."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 1450.0,
+    "unit": "flat",
+    "caveats": [
+      "packing materials not included",
+      "$200 deposit to hold the date"
+    ],
+    "note": null
+  },
+  "notes": "Clean flat quote with two caveats. The recap repeats the price exactly."
+}

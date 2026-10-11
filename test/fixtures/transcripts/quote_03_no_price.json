@@ -1,0 +1,52 @@
+{
+  "id": "quote_03_no_price",
+  "track": "quote",
+  "scenario": "no price given, walkthrough required",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Golden Gate Van Lines?"
+    },
+    {
+      "speaker": "user",
+      "text": "Golden Gate Van Lines, how can I help?"
+    },
+    {
+      "speaker": "agent",
+      "text": "I'm an AI assistant calling for Vedant. He's moving a two-bedroom from Palo Alto to Oakland on Saturday the 24th and wanted a ballpark."
+    },
+    {
+      "speaker": "user",
+      "text": "We don't quote two-bedrooms over the phone, sorry. The estimator has to come out and do a walkthrough, then you get a binding number."
+    },
+    {
+      "speaker": "agent",
+      "text": "Okay. Is there a rough range at least?"
+    },
+    {
+      "speaker": "user",
+      "text": "I really can't, it depends on the inventory. The walkthrough is free, and I can get someone out Thursday or Friday."
+    },
+    {
+      "speaker": "agent",
+      "text": "I'd have to check on that with him. Just to confirm, no price over the phone, free in-home estimate available Thursday or Friday. Thanks, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay, bye."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": null,
+    "unit": null,
+    "caveats": [
+      "in-home walkthrough required for a binding quote"
+    ],
+    "note": "no price stated"
+  },
+  "notes": "No number anywhere. Expected amount and unit are null; the extractor must not invent a price from the two-bedroom or the dates."
+}
