@@ -165,11 +165,23 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+_DASHES = re.compile(r"\s*[–—]\s*")
+_GREETING = re.compile(r"^(?:hi|hello|hey|good (?:morning|afternoon|evening))[,!.]?\s+", re.IGNORECASE)
+
+
 def _text(value: Any) -> str:
+    """A safe string: None and non-strings never leak, and model prose loses its en and em dashes."""
     if value is None:
         return ""
-    text = str(value).strip()
+    text = _DASHES.sub(", ", str(value)).strip()
     return "" if text.lower() in ("none", "null", "undefined") else text
+
+
+def _spoken(value: Any) -> str:
+    """Model prose the agent will say: no greeting (the fixed opener already said hi), one line."""
+    text = re.sub(r"\s+", " ", _text(value))
+    text = _GREETING.sub("", text)
+    return text[:1].upper() + text[1:] if text else ""
 
 
 def _words(text: str) -> set[str]:
@@ -436,7 +448,8 @@ async def search_structured(
     Verified against openai 3.29.0 (Oct 11 2026):
         client.responses.parse(model=..., instructions=system, input=user,
             tools=[{"type": "web_search", "search_context_size": "low", "user_location": {...}}],
-            text_format=schema, include=["web_search_call.action.sources"], max_tool_calls=4)
+            tool_choice={"type": "web_search"}, text_format=schema,
+            include=["web_search_call.action.sources"], max_tool_calls=4)
     response.output has web_search_call items (action.query, action.sources[].url) and a message whose
     output_text content carries .annotations of type url_citation {title, url, start_index, end_index};
     response.output_parsed is the schema instance. Falls back to a plain structured call when the account
@@ -461,19 +474,22 @@ async def search_structured(
                 tool: dict[str, Any] = {"type": "web_search", "search_context_size": SEARCH_CONTEXT_SIZE}
                 if location:
                     tool["user_location"] = location
+                # tool_choice forces at least one real search; without it gpt-4.1 sometimes answers from
+                # memory, returns no web_search_call item and no url_citation annotations.
                 kwargs.update(
                     tools=[tool],
+                    tool_choice={"type": "web_search"},
                     include=["web_search_call.action.sources"],
                     max_tool_calls=MAX_TOOL_CALLS_PER_SEARCH,
                 )
             try:
                 response = await client.responses.parse(**kwargs)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not use_tool or not _is_tool_rejection(exc):
                     raise
                 _web_search_unavailable = True
                 use_tool = False
-                for key in ("tools", "include", "max_tool_calls"):
+                for key in ("tools", "tool_choice", "include", "max_tool_calls"):
                     kwargs.pop(key, None)
                 response = await client.responses.parse(**kwargs)
         parsed = response.output_parsed
@@ -604,7 +620,8 @@ def _objective(category: dict, name: str, details: dict, request: str) -> str:
     if key == "storage":
         start = f" starting{when}" if date else ""
         return f"Get {name}'s monthly price for a small unit near {city or 'the new address'}{start}, the admin fee, and any student discount."
-    return f"Call {name} about: {re.sub(r'\\s+', ' ', request or '').strip()[:200]}."
+    about = re.sub(r"\s+", " ", request or "").strip()[:200]
+    return f"Call {name} about: {about}."
 
 
 def _default_opening(category: dict, details: dict, variant: str) -> str:
@@ -683,8 +700,8 @@ def _strategy(category: dict, name: str, details: dict, profile: dict | None, re
             if track == "quote"
             else "schedule track: book the earliest slot inside the client's availability"
         )
-    opening = _text(finding.opening) if finding else ""
-    if not (20 <= len(opening) <= 240) or "\n" in opening:
+    opening = _spoken(finding.opening) if finding else ""
+    if not (20 <= len(opening) <= 240):
         opening = _default_opening(category, details, variant)
     return {
         "variant": variant,
@@ -722,6 +739,8 @@ def _roster_item(category: dict, vendor: dict, details: dict, profile: dict | No
         "citations": [],
         "recommended": bool(phone),
         "phone_verified": bool(phone),
+        "phone_source": "roster" if phone else None,
+        "phone_note": None,
         "skip_reason": None if phone else "roster row has no phone number",
     }
 
@@ -812,24 +831,48 @@ async def _item_from_finding(ctx: _Context, category: dict, finding: VendorFindi
     # Phone: only when the digits appear in a page we fetched.
     phone = phones.normalize(finding.phone_as_written)
     phone_verified = False
+    phone_source: str | None = None
+    phone_note: str | None = None
     skip_reason: str | None = None
-    if finding.phone_as_written and not phone:
-        skip_reason = "phone in sources is not a US number"
-    elif not phone:
-        skip_reason = "no phone number found in sources"
-    else:
-        candidates = [u for u in referenced if phones.url_key(u) in index_by_key] or referenced
+    candidates = [u for u in referenced if phones.url_key(u) in index_by_key] or referenced
+    if phone:
         async with ctx.fetch_limit:
             proof = await phones.verify_phone(phone, candidates, ctx.cache, max_pages=MAX_FETCH_PER_ITEM)
         if proof:
             phone_verified = True
+            phone_source = "model_and_page"
             key = phones.url_key(proof)
             if key not in index_by_key:
                 citations.append({"title": phones.host_of(proof) or "source", "url": proof, "verified": "fetched"})
                 index_by_key[key] = len(citations) - 1
+    if not phone_verified:
+        # The model's number was absent, foreign or not on any page. The vendor's own page can still
+        # settle it when it presents exactly one number (research.phones.single_page_phone).
+        own_hosts = {h for h in (phones.host_of(finding.website), phones.host_of(finding.phone_source_url)) if h}
+        for url in candidates:
+            if phones.host_of(url) not in own_hosts:
+                continue
+            text = ctx.cache.pages.get(phones.url_key(url) or "")
+            found = phones.single_page_phone(text)
+            if found:
+                reported = f"the model reported {finding.phone_as_written}" if finding.phone_as_written else (
+                    "the model reported no number"
+                )
+                phone_note = f"number taken from the single number on {phones.host_of(url)}; {reported}"
+                phone, phone_verified, phone_source = found, True, "page"
+                key = phones.url_key(url)
+                if key not in index_by_key:
+                    citations.append({"title": phones.host_of(url) or "source", "url": url, "verified": "fetched"})
+                    index_by_key[key] = len(citations) - 1
+                break
+    if not phone_verified:
+        if finding.phone_as_written and not phones.normalize(finding.phone_as_written):
+            skip_reason = "phone in sources is not a US number"
+        elif not finding.phone_as_written:
+            skip_reason = "no phone number found in sources"
         else:
-            phone = None
             skip_reason = "phone not confirmed in fetched sources"
+        phone = None
 
     def cite(url: str | None) -> int | None:
         return index_by_key.get(phones.url_key(url) or "")
@@ -890,6 +933,8 @@ async def _item_from_finding(ctx: _Context, category: dict, finding: VendorFindi
         "citations": citations,
         "recommended": phone_verified and confidence >= 0.5,
         "phone_verified": phone_verified,
+        "phone_source": phone_source,
+        "phone_note": phone_note,
         "skip_reason": skip_reason,
     }
 
@@ -946,7 +991,7 @@ async def _run(ctx: _Context) -> None:
     tasks.append(_regulations(ctx))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for cat, res in zip([c for c in ctx.categories if c.get("query")], results):
-        if isinstance(res, asyncio.TimeoutError):
+        if isinstance(res, TimeoutError):
             ctx.errors.append(f"{cat['key']}: search timed out after {QUERY_TIMEOUT_SECONDS:.0f}s")
         elif isinstance(res, BaseException):
             ctx.errors.append(f"{cat['key']}: {type(res).__name__}: {res}"[:200])
@@ -999,16 +1044,19 @@ def _assemble(ctx: _Context) -> dict:
     items: list[dict] = []
     seen_roster: set[str] = set()
     categories = list(ctx.categories)
+    derived = bool(ctx.categories)  # the request or profile named categories; roster vendors must fit one
     for vendor in ctx.roster or []:
         if not isinstance(vendor, dict) or not (vendor.get("key") or vendor.get("name")):
             continue
         cat = _roster_category(vendor, categories)
         if cat is None:
-            if categories:
+            if derived:
                 continue
             cat = _track_category(vendor)
             if cat["key"] not in {c["key"] for c in categories}:
                 categories.append(cat)
+            else:
+                cat = next(c for c in categories if c["key"] == cat["key"])
         key = _text(vendor.get("key")) or _slug(_text(vendor.get("name")))
         if key in seen_roster:
             continue
@@ -1079,8 +1127,10 @@ async def research(
         return _minimal(request, [f"setup: {type(exc).__name__}: {exc}"[:200]])
     try:
         await asyncio.wait_for(_run(ctx), OVERALL_BUDGET_SECONDS)
-    except asyncio.TimeoutError:
-        ctx.errors.append(f"research budget of {OVERALL_BUDGET_SECONDS:.0f} seconds exhausted; returning what finished")
+    except TimeoutError:
+        ctx.errors.append(
+            f"research budget of {OVERALL_BUDGET_SECONDS:.0f} seconds exhausted; returning what finished"
+        )
     except Exception as exc:  # noqa: BLE001
         ctx.errors.append(f"research: {type(exc).__name__}: {exc}"[:200])
     try:

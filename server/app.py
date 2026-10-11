@@ -37,6 +37,7 @@ from server.accuracy import accuracy_report, keewano_token_kind, mask_phone
 from server.auth import bearer_token, current_user_id, ensure_profile
 from server.schemas import (
     JsonRpcRequest,
+    LedgerCreate,
     LedgerFire,
     ProfileUpdate,
     ProposalApprove,
@@ -514,6 +515,25 @@ def get_ledger(user_id: UserId, store: StoreDep) -> list[dict]:
     return store.list_ledger(user_id)
 
 
+@app.post(f"{PREFIX}/ledger")
+def post_ledger(body: LedgerCreate, user_id: UserId, store: StoreDep) -> dict:
+    """A manual dated entry from the calendar (a booking the user made themselves). No source call."""
+    ensure_profile(store, user_id)
+    row = {
+        "user_id": user_id,
+        "vendor_id": None,
+        "kind": body.kind,
+        "label": body.label.strip(),
+        "amount_usd": body.amount_usd,
+        "effective_on": body.effective_on,
+        "expires_on": body.expires_on,
+        "source_call": None,
+    }
+    rows = store.insert_ledger([row])
+    log_event(store, user_id, "ledger_written", {"manual": True, "kind": body.kind, "label": row["label"]})
+    return rows[0] if rows else row
+
+
 @app.get(f"{PREFIX}/events")
 def get_events(user_id: UserId, store: StoreDep, limit: int = 50) -> list[dict]:
     return store.list_events(user_id, max(1, min(limit, 500)))
@@ -950,13 +970,15 @@ def normalize_proposal(raw: Any, request_text: str) -> dict:
 
 
 def item_vendor(item: dict) -> dict:
-    """{name, phone, website} from the item's `vendor` block, falling back to flat keys. phone is None when
-    the engine kept none (it only keeps a phone that appeared in a fetched source or on the roster)."""
+    """{name, phone, website, roster_vendor_id} from the item's `vendor` block, falling back to flat keys.
+    phone is None when the engine kept none (it only keeps a phone that appeared in a fetched source or on
+    the roster); roster_vendor_id is the vendors.id the engine copied from the roster, or None."""
     vendor = _as_dict(item.get("vendor"))
     return {
         "name": _str(vendor.get("name") or item.get("vendor_name") or item.get("name")),
         "phone": _str(vendor.get("phone") or item.get("phone")) or None,
         "website": _str(vendor.get("website") or item.get("website") or item.get("url")) or None,
+        "roster_vendor_id": _str(vendor.get("roster_vendor_id") or item.get("roster_vendor_id")) or None,
     }
 
 
@@ -1013,12 +1035,15 @@ def research_counts(body: dict, seconds: float) -> dict:
     items = body.get("items") or []
     categories = {_str(it.get("category")).lower() for it in items if _str(it.get("category"))}
     meta = body.get("meta") or {}
+    web_search = body.get("web_search")
+    if web_search is None:
+        web_search = meta.get("web_search", False)
     return {
         "items": len(items),
         "phones_verified": sum(1 for it in items if item_vendor(it)["phone"]),
         "categories": len(categories),
         "regulations": len(body.get("regulations") or []),
-        "web_search": meta.get("web_search", False),
+        "web_search": bool(web_search),
         "seconds": round(seconds, 2),
         "errors": len(body.get("errors") or []),
     }
@@ -1082,8 +1107,12 @@ def get_proposal(proposal_id: str, user_id: UserId, store: StoreDep) -> dict:
 
 
 def _vendor_for_item(store: Store, user_id: str, item: dict, vendor_info: dict, roster: list[dict]) -> dict:
-    """The vendors row an approved item dials: the roster row with the same phone, else an upserted
-    research row (key r_<category>-<name>, is_demo false, source research, website kept)."""
+    """The vendors row an approved item dials: the roster row the engine named (vendor.roster_vendor_id) or
+    the one with the same phone, else an upserted research row (key r_<category>-<name>, is_demo false,
+    source research, website kept)."""
+    for vendor in roster:
+        if vendor_info["roster_vendor_id"] and str(vendor.get("id")) == vendor_info["roster_vendor_id"]:
+            return vendor
     for vendor in roster:
         if same_phone(vendor.get("phone"), vendor_info["phone"]):
             return vendor

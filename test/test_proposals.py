@@ -1,10 +1,10 @@
 """Research-first flow: POST /research stores a proposal, POST /proposals/{id}/approve turns the approved
 items into a run, POST /proposals/{id}/reject closes one.
 
-The research engine (research.engine.research, another lane's module) is replaced with a fixture proposal of
-three items: one external vendor with a verified phone, one with no phone, one whose phone matches an is_demo
-roster vendor. dispatch_run is a recorder. The store, the routes, the vendor upsert and the tick's simulate
-path are the real modules.
+The research engine (research.engine.research, another lane's module) is replaced with a fixture proposal in
+the shape research/engine.py `_assemble` produces, with three items: one external vendor with a verified phone,
+one with no phone, one whose phone (and roster_vendor_id) matches an is_demo roster vendor. dispatch_run is a
+recorder. The store, the routes, the vendor upsert and the tick's simulate path are the real modules.
 """
 
 from __future__ import annotations
@@ -39,93 +39,154 @@ VENDORS = [
     },
 ]
 
-ISP, DENTIST, MOVERS = "isp-fiberfast-student-300", "dentist-palo-alto-smiles", "movers-pack-and-go"
+ISP = "c0ffee00-0000-4000-8000-000000000001"
+DENTIST = "c0ffee00-0000-4000-8000-000000000002"
+MOVERS = "c0ffee00-0000-4000-8000-000000000003"
 
+# research/engine.py `_assemble` shape (docs/CONTRACT.md "proposal body").
 PROPOSAL = {
-    "summary": "Three calls cover the move: one mover quote, internet at the new address, a dentist near campus.",
+    "request": REQUEST,
+    "details": {"date": "October 25", "bedrooms": "1-bedroom", "destination": "Palo Alto", "state": "CA"},
+    "categories": [
+        {"key": "internet", "label": "Internet", "track": "negotiate", "source": "request"},
+        {"key": "dentist", "label": "Dentist", "track": "schedule", "source": "request"},
+        {"key": "movers", "label": "Movers", "track": "quote", "source": "request"},
+    ],
     "items": [
         {
             "id": ISP,
             "category": "internet",
             "track": "negotiate",
-            "recommended": True,
+            "source": "web",
             "vendor": {
+                "key": "internet_fiberfast",
                 "name": "FiberFast",
                 "phone": "+15550100001",
                 "website": "https://fiberfast.example/plans",
                 "address": None,
+                "is_demo": False,
+                "roster_vendor_id": None,
             },
-            "plan": {"name": "Student 300", "monthly_usd": 35.0, "one_time_usd": 0.0, "term": "no contract"},
+            "why": "Cheapest no-contract plan serving the new address; the student rate is on the plans page.",
+            "plans": [
+                {
+                    "name": "Student 300",
+                    "price_usd": 35.0,
+                    "unit": "per month",
+                    "notes": "no contract",
+                    "citation": 0,
+                    "price_in_source": True,
+                }
+            ],
             "discounts": [
                 {
                     "label": "student rate",
-                    "amount": "$10/mo off",
-                    "eligibility": ".edu email",
-                    "citations": ["https://fiberfast.example/students"],
+                    "who_qualifies": ".edu email",
+                    "how_to_claim": "ask when ordering",
+                    "citation": 1,
                 }
             ],
-            "why": "Cheapest no-contract plan serving the new address; the student rate is on the plans page.",
             "strategy": {
-                "opening": "Set up FiberFast internet at the new Palo Alto address for move-in on October 25.",
+                "variant": "new_service",
+                "label": "new service at a new address",
+                "reason": "the objective is to set up service at a new address, so there is no bill to anchor on",
                 "asks": ["student rate", "installation fee waived", "no contract"],
-                "fallback": "If the student rate is refused, ask for the new-customer promotion instead.",
+                "opening": "Set up FiberFast internet at the new Palo Alto address for move-in on October 25.",
+                "walk_away": "If the install date is after the move-in date, ask for the soonest earlier slot.",
+                "objective": "Set up internet with FiberFast at the client's new address in Palo Alto.",
             },
-            "regulations": ["California requires a written notice of any early-termination fee."],
+            "confidence": 0.9,
             "citations": [
-                {
-                    "url": "https://fiberfast.example/plans",
-                    "title": "Plans",
-                    "fetched_at": "2026-10-11T18:00:00Z",
-                }
+                {"title": "Plans", "url": "https://fiberfast.example/plans", "verified": "fetched"},
+                {"title": "Students", "url": "https://fiberfast.example/students", "verified": "api"},
             ],
+            "recommended": True,
             "phone_verified": True,
-            "source": "research",
+            "skip_reason": None,
         },
         {
             "id": DENTIST,
             "category": "dentist",
             "track": "schedule",
-            "recommended": False,
+            "source": "web",
             "vendor": {
+                "key": "dentist_palo-alto-smiles",
                 "name": "Palo Alto Smiles",
                 "phone": None,
                 "website": "https://paloaltosmiles.example",
+                "address": None,
+                "is_demo": False,
+                "roster_vendor_id": None,
             },
-            "plan": None,
-            "discounts": [],
             "why": "Closest in-network dentist to campus, but no phone number appeared on any fetched page.",
-            "strategy": {"opening": "Book the earliest new-patient cleaning.", "asks": ["student insurance"]},
-            "citations": [{"url": "https://paloaltosmiles.example", "title": "Home"}],
+            "plans": [],
+            "discounts": [],
+            "strategy": {
+                "variant": "schedule",
+                "label": "earliest appointment",
+                "reason": "schedule track: book the earliest slot inside the client's availability",
+                "asks": ["new patient", "accepts student insurance or self-pay rate"],
+                "opening": "Book the earliest new-patient cleaning.",
+                "walk_away": "If nothing fits, take their next two open slots and say the client will confirm.",
+                "objective": "Book the earliest new-patient dental cleaning with Palo Alto Smiles.",
+            },
+            "confidence": 0.3,
+            "citations": [{"title": "Home", "url": "https://paloaltosmiles.example", "verified": "fetched"}],
+            "recommended": False,
             "phone_verified": False,
-            "source": "research",
+            "skip_reason": "no phone number on any fetched page",
         },
         {
             "id": MOVERS,
             "category": "movers",
             "track": "quote",
-            "recommended": True,
-            "vendor": {"name": "Pack & Go", "phone": "+15550000001", "website": None},
-            "plan": None,
-            "discounts": [{"label": "student move discount", "amount": None, "citations": []}],
-            "why": "Already on the roster; quoted well last time.",
-            "strategy": {
-                "opening": "Get an all-in quote from Pack & Go to move a 1-bedroom to Palo Alto on October 25.",
-                "asks": ["student move discount if any", "no deposit above 10 percent"],
-            },
-            "citations": [],
-            "phone_verified": True,
             "source": "roster",
+            "vendor": {
+                "key": "movers_a",
+                "name": "Pack & Go",
+                "phone": "+15550000001",
+                "website": None,
+                "address": None,
+                "is_demo": True,
+                "roster_vendor_id": None,  # the fake engine fills this from the roster, as the real one does
+            },
+            "why": "already on your roster",
+            "plans": [],
+            "discounts": [],
+            "strategy": {
+                "variant": "quote",
+                "label": "all-in price quote",
+                "reason": "quote track: compare all-in prices across vendors before choosing",
+                "asks": ["student move discount if any", "no deposit above 10 percent"],
+                "opening": "Get an all-in quote from Pack & Go to move a 1-bedroom to Palo Alto on October 25.",
+                "walk_away": "If the deposit is above 10 percent of the quote, say the client will think it over.",
+                "objective": "Get an all-in quote from Pack & Go to move a 1-bedroom to Palo Alto on October 25.",
+            },
+            "confidence": 1.0,
+            "citations": [],
+            "recommended": True,
+            "phone_verified": True,
+            "skip_reason": None,
         },
     ],
     "regulations": [
         {
-            "topic": "early termination fees",
-            "note": "California requires a written notice of any early-termination fee.",
-            "citations": ["https://example.gov/etf"],
+            "key": "etf_notice",
+            "rule": "California requires a written notice of any early-termination fee.",
+            "jurisdiction": "CA",
+            "applies": True,
+            "what_we_do": "Ask for the ETF in writing before agreeing to any term.",
+            "citation_title": "ETF notice",
+            "citation_url": "https://example.gov/etf",
         }
     ],
+    "summary": "Three calls cover the move: one mover quote, internet at the new address, a dentist near campus.",
+    "generated_at": "2026-10-11T18:01:00+00:00",
+    "model": "test",
+    "web_search": True,
+    "search_count": 3,
     "errors": [],
-    "meta": {"web_search": True, "seconds": 41.2, "model": "test", "generated_at": "2026-10-11T18:01:00Z"},
+    "seconds": 41.2,
 }
 
 
@@ -145,17 +206,29 @@ def _engine_module(monkeypatch) -> types.ModuleType:
         return engine
 
 
+def _with_roster_ids(proposal: dict, roster: list[dict]) -> dict:
+    """What the real engine does for roster items: copy the vendors row id and is_demo onto the item."""
+    by_phone = {v.get("phone"): v for v in roster}
+    for item in proposal.get("items") or []:
+        vendor = item.get("vendor") or {}
+        if item.get("source") == "roster" and vendor.get("phone") in by_phone:
+            match = by_phone[vendor["phone"]]
+            vendor["roster_vendor_id"] = match["id"]
+            vendor["is_demo"] = bool(match.get("is_demo"))
+    return proposal
+
+
 @pytest.fixture
 def fake_research(monkeypatch):
     engine = _engine_module(monkeypatch)
     rec: dict = {"calls": [], "result": copy.deepcopy(PROPOSAL)}
 
-    async def research(profile, request, roster):
+    async def research(profile, request, roster, **_kwargs):
         rec["calls"].append({"profile": profile, "request": request, "roster": roster})
         result = rec["result"]
         if isinstance(result, Exception):
             raise result
-        return copy.deepcopy(result)
+        return _with_roster_ids(copy.deepcopy(result), roster)
 
     monkeypatch.setattr(engine, "research", research, raising=False)
     return rec
@@ -228,8 +301,9 @@ def test_research_stores_and_returns_proposal(client, fake_research):
     body = row["proposal"]
     assert [it["id"] for it in body["items"]] == [ISP, DENTIST, MOVERS]
     assert body["items"][0]["vendor"]["phone"] == "+15550100001"
-    assert body["regulations"] and body["meta"]["web_search"] is True and body["errors"] == []
-    assert body["request"] == REQUEST
+    assert body["items"][0]["plans"][0]["price_usd"] == 35.0, "the body is stored as the engine returned it"
+    assert body["regulations"] and body["web_search"] is True and body["errors"] == []
+    assert body["summary"] and body["request"] == REQUEST
 
     # The engine saw the profile, the request and the roster; the roster is what makes "already on file" possible.
     assert len(fake_research["calls"]) == 1
@@ -237,6 +311,10 @@ def test_research_stores_and_returns_proposal(client, fake_research):
     assert seen["profile"]["id"] == USER
     assert seen["request"] == REQUEST
     assert {v["key"] for v in seen["roster"]} == {v["key"] for v in VENDORS}
+    roster_item = body["items"][2]
+    assert roster_item["vendor"]["roster_vendor_id"] == next(
+        v["id"] for v in seen["roster"] if v["key"] == "movers_a"
+    )
 
     listed = c.get(f"{P}/proposals").json()
     assert [p["id"] for p in listed] == [row["id"]]
@@ -256,15 +334,18 @@ def test_research_stores_and_returns_proposal(client, fake_research):
     assert isinstance(data["seconds"], (int, float)) and data["seconds"] >= 0
 
 
-def test_research_items_get_ids_when_engine_omits_them(client, fake_research):
+def test_research_tolerates_a_sparse_engine_result(client, fake_research):
     c, _, _ = client
     fake_research["result"] = {
-        "items": [{"category": "movers", "vendor": {"name": "X", "phone": "+15550100009"}}]
+        "items": [{"category": "movers", "vendor": {"name": "X", "phone": "+15550100009"}}],
+        "meta": {"web_search": False},
     }
     row = _research(c)
     assert row["status"] == "proposed"
     assert row["proposal"]["items"][0]["id"] == "item-1"
     assert row["proposal"]["errors"] == [] and row["proposal"]["regulations"] == []
+    (event,) = _events(c, "research_completed")
+    assert event["data"]["web_search"] is False and event["data"]["phones_verified"] == 1
 
 
 def test_research_failure_is_a_failed_proposal(client, fake_research):
@@ -340,7 +421,7 @@ def test_approve_without_external_calls(client, fake_research, monkeypatch):
     assert external["objective"].endswith("Ask for: student rate, installation fee waived, no contract.")
     assert len(external["objective"]) < 600
 
-    # The roster vendor (matched by phone): reused, not duplicated, and handed to dispatch_run.
+    # The roster vendor (matched by roster_vendor_id): reused, not duplicated, and handed to dispatch_run.
     roster = calls["movers_a"]
     assert roster["target_name"] == "Pack & Go" and roster["track"] == "quote"
     assert roster["simulated"] is False
@@ -462,15 +543,18 @@ def test_approve_subset_and_skips(client, fake_research):
 
 
 def test_approve_dedupes_same_vendor_and_respects_cap(client, fake_research, monkeypatch):
+    """A second plan from the same provider is one call, not two; a roster match by phone alone (no
+    roster_vendor_id) still reuses the roster row; the MAX_CALLS_PER_RUN cap is honored."""
     c, _, _ = client
     items = copy.deepcopy(PROPOSAL["items"])
     twin = copy.deepcopy(items[0])
     twin["id"] = "isp-fiberfast-gig"
-    twin["plan"] = {"name": "Gig", "monthly_usd": 60.0}
+    twin["plans"] = [{"name": "Gig", "price_usd": 60.0, "unit": "per month", "notes": None, "citation": 0}]
     extra = {
         "id": "movers-bay-haulers",
         "category": "movers",
         "track": "quote",
+        "source": "web",
         "vendor": {"name": "Bay Haulers", "phone": "+15550000002"},
         "why": "Second quote.",
         "strategy": {"opening": "Get a quote from Bay Haulers.", "asks": []},
@@ -489,6 +573,16 @@ def test_approve_dedupes_same_vendor_and_respects_cap(client, fake_research, mon
         {"item_id": "isp-fiberfast-gig", "reason": f"same vendor as {ISP}"},
         {"item_id": "movers-bay-haulers", "reason": "over the MAX_CALLS_PER_RUN cap of 2"},
     ]
+
+    monkeypatch.setenv("MAX_CALLS_PER_RUN", "5")
+    second = _research(c)
+    r = c.post(f"{P}/proposals/{second['id']}/approve", json={"item_ids": ["movers-bay-haulers"]})
+    assert r.status_code == 200, r.text
+    (call,) = r.json()["run"]["calls"]
+    assert call["vendor_key"] == "movers_b" and call["simulated"] is False, (
+        "phone match reuses the roster row"
+    )
+    assert len(c.get(f"{P}/vendors").json()) == len(VENDORS) + 1
 
 
 def test_objective_stays_under_600_chars():

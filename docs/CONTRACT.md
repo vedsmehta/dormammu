@@ -340,30 +340,35 @@ failed when the engine returned no items and reported errors. approve writes dis
 approved_item_ids, the item ids that became calls rows); reject writes rejected. RLS: "own proposals".
 
 ### proposal body (proposals.proposal). What `research.engine.research(profile, request, roster)` returns
+(research/engine.py `_assemble`; `research/schemas.py` Proposal is the authority, this is the summary)
 ```
-{"request": str, "summary": str | null,
- "items": [ProposalItem], "regulations": [{"topic": str, "note": str, "citations": [url]}],
- "errors": [str],
- "meta": {"web_search": bool, "seconds": float, "model": str | null, "generated_at": iso}}
+{"request": str, "details": {date, bedrooms, origin, destination, budget, state, is_move, ...},
+ "categories": [{"key", "label", "track", "why", "source": "request"|"profile", "query", "provider"|null}],
+ "items": [ProposalItem], "regulations": [RegulationFinding (research/regulations.py)],
+ "summary": str, "generated_at": iso, "model": str,
+ "web_search": bool, "search_count": int, "errors": [str], "seconds": float | null}
 
 ProposalItem = {
- "id": str,                              # stable inside the proposal, e.g. "isp-fiberfast-student-300"
- "category": str,                        # movers | internet | dentist | ...
+ "id": uuid str,
+ "category": str,                        # category key: movers | internet | dentist | lower_<slug> | ...
  "track": "quote" | "schedule" | "negotiate",
- "recommended": bool,
- "vendor": {"name": str, "phone": str | null, "website": str | null, "address": str | null},
- "plan": {"name": str | null, "monthly_usd": float | null, "one_time_usd": float | null, "term": str | null} | null,
- "discounts": [{"label": str, "amount": str | null, "eligibility": str | null, "citations": [url]}],
- "why": str,                             # one or two sentences, cited
- "strategy": {"opening": str, "asks": [str], "fallback": str | null},
- "regulations": [str],
- "citations": [{"url": str, "title": str | null, "fetched_at": iso}],
- "phone_verified": bool,                 # the phone appeared in a fetched source (or is a roster phone)
- "source": "research" | "roster"}
+ "source": "web" | "roster",
+ "vendor": {"key": str, "name": str, "phone": str | null, "website": str | null, "address": str | null,
+            "is_demo": bool, "roster_vendor_id": vendors.id | null},
+ "why": str,
+ "plans": [{"name", "price_usd", "unit", "notes", "citation": int (index into citations), "price_in_source"}],
+ "discounts": [{"label", "who_qualifies", "how_to_claim", "citation": int}],
+ "strategy": {"variant": str, "label": str, "reason": str, "asks": [str], "opening": str,
+              "walk_away": str, "objective": str},
+ "confidence": float, "citations": [{"title", "url", "verified": "api"|"fetched"|"roster"|null}],
+ "recommended": bool, "phone_verified": bool, "skip_reason": str | null}
 ```
-The server normalizes on the way in (`server.app.normalize_proposal`): every item gets an `id`
-(`item_id` is accepted; missing ids become `item-N`), `errors`, `regulations` and `meta` always exist,
-pydantic models are dumped. Tolerant reads: `vendor` may be flat (`name`, `phone`, `website` on the item).
+What the server reads from an item (everything else is passed through to the UI): `id`, `category`,
+`track`, `vendor.name`, `vendor.phone`, `vendor.website`, `vendor.roster_vendor_id`, `why`,
+`strategy.opening`, `strategy.asks`. Normalization on the way in (`server.app.normalize_proposal`): every
+item gets an `id` (`item_id` accepted; missing ids become `item-N`), `errors`, `regulations` and `meta`
+always exist, pydantic models are dumped. Tolerant reads: `vendor` may be flat (`name`, `phone`, `website`
+on the item); `web_search` is read at the top level, then `meta.web_search`.
 Non-negotiable: the engine never invents a phone, a price or a discount; a phone is kept only when it
 appeared in a fetched source or on the roster. The server does not re-verify; it dials nothing without one.
 
@@ -371,9 +376,10 @@ appeared in a fetched source or on the roster. The server does not re-verify; it
 - Item without `vendor.phone` -> skipped, reason "no verified phone". Unknown id -> "not in this proposal".
   Two items on one vendor -> the second is skipped "same vendor as <item_id>". Over MAX_CALLS_PER_RUN ->
   skipped with the cap named. No dialable item -> 400, no run.
-- Vendor row: the roster row whose phone matches (digits-only, last 10) is reused; otherwise
-  `upsert_vendors` with key `research_vendor_key(category, name)` = "r_" + slug, cap 40 chars; is_demo
-  false; source research; website kept.
+- Vendor row: the roster row named by `vendor.roster_vendor_id`, else the roster row whose phone matches
+  (digits-only, last 10), is reused; otherwise `upsert_vendors` with key
+  `research_vendor_key(category, name)` = "r_" + slug, cap 40 chars; is_demo false; source research;
+  website kept.
 - calls row: vendor_id, vendor_key, track (item track, else vendor track, else by category), target_name,
   target_phone, objective = `item_objective(item)` = strategy.opening + " " + why + " Ask for: " +
   ", ".join(strategy.asks) + ".", kept under 600 chars (why is trimmed first); prior_context from

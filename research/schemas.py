@@ -135,6 +135,8 @@ class Item(Loose):
     citations: list[Citation] = Field(default_factory=list)
     recommended: bool = False
     phone_verified: bool = False
+    phone_source: Literal["roster", "model_and_page", "page"] | None = None
+    phone_note: str | None = None
     skip_reason: str | None = None
 
 
@@ -153,6 +155,7 @@ class Regulation(Loose):
     applies: bool
     what_we_do: str
     citation: Citation | None = None
+    claimed_citation: Citation | None = None  # named by the model or our baseline, not verified
     key: str | None = None
     note: str | None = None
 

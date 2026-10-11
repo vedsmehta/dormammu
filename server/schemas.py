@@ -79,6 +79,16 @@ class LedgerFire(BaseModel):
     as_of: str = Field(min_length=10)
 
 
+class LedgerCreate(BaseModel):
+    """POST /ledger: a manual dated entry (calendar bookings), same shape as rows the aggregator writes."""
+
+    kind: Literal["promo_expiry", "renewal", "appointment", "quote"]
+    label: str = Field(min_length=1, max_length=200)
+    effective_on: str | None = None
+    expires_on: str | None = None
+    amount_usd: float | None = None
+
+
 class JsonRpcRequest(BaseModel):
     jsonrpc: str = "2.0"
     id: int | str | None = None
