@@ -23,10 +23,55 @@ Dormammu is an agentic calling system. One request from the user ("I'm moving ne
 month, handle it") triages everything that needs a phone call, spawns N calls
 **simultaneously**, and aggregates the results back into one place.
 
-**Target user:** general-purpose — anyone, not a narrow persona. The strongest
-demo wedge is life-transition moments (moving, turning 18, starting school/a job)
-because the number of simultaneous phone-gated tasks peaks there, but the mechanic
-works for anyone's ongoing bills/appointments/subscriptions too.
+**Target user (v1): college students**, specifically at the move-in / first
+off-campus apartment moment. Why students first:
+
+- **Densest cluster of phone-gated tasks.** ISP, renters insurance, utilities,
+  a doctor and dentist near campus, and canceling it all nine months later —
+  typically the first time they have done any of it themselves.
+- **Least equipped to do it.** No prior quotes to anchor on, no idea what is
+  negotiable, and the cohort most likely to avoid a phone call altogether.
+- **A concrete lever the agent can pull.** Student rates and promos often exist
+  but are only applied when asked for. The agent asks on every call.
+- **Tight distribution.** One campus, one move-in week, word of mouth.
+
+**Cohort-aware by design, not student-only forever.** The user has an
+*eligibility profile* (student, senior, military/veteran, new mover, etc.) that
+the router injects into every call script: which discounts to ask for, which
+vendors are relevant, which proof the vendor will want. Students are cohort #1;
+seniors (AARP/senior rates, Medicare-adjacent scheduling) are the obvious #2.
+Adding a cohort means adding a profile, not rebuilding the product. Note the
+axis is eligibility, not age as such — age is just the most common proxy.
+
+### 2.1 Why users come back: the ledger
+
+Move-in week is the acquisition moment, not the product. Every call Dormammu
+places writes a structured record: vendor, account, rate, promo end date,
+renewal date, what proof was required, who we spoke to, what worked. After the
+first fan-out the user has something they have never had before — one place that
+knows every account they hold and when each one next needs attention. That
+**ledger** is the retained asset, and the calling agent becomes how it acts.
+
+What brings a student back, in order of how often it fires:
+
+| Trigger | Cadence | What Dormammu does |
+|---|---|---|
+| Bill came in higher than the ledger rate | Monthly | Flags the delta, offers to call and dispute |
+| Recurring appointments (dentist, checkup, refills) | 1–6 months | Rebooks against the calendar |
+| Open claims and disputes (deposit, refund, insurance claim) | Until resolved | Follows up on a schedule so the user doesn't have to chase |
+| Intro/promo rate expiring | ~12 months | Calls retention before expiry, re-shops in parallel if they won't hold the rate |
+| Eligibility re-verification (student status, renewals) | Each term/year | Reminds, collects proof once, resubmits to every vendor that needs it |
+| Academic-calendar events (summer away, study abroad, move-out) | Each term | Pause, transfer, or cancel every account in one fan-out, because the ledger already lists them |
+| Graduation | Once | Profile flips from `student` to `new grad`: student rates end, so re-shop everything |
+
+The interaction model is **approve, not operate**: Dormammu notices the trigger
+and sends "your internet promo ends in 21 days, want me to call?" The user taps
+yes. Retention is measured in actions taken on the user's behalf per month, not
+app opens.
+
+Two things compound with use: the ledger gets more complete (higher switching
+cost), and call outcomes across users show what a given vendor actually concedes
+and what students nearby actually pay (see §6), which makes each next call better.
 
 **Without Dormammu:** see appendix — money and time leak out continuously through
 tasks that are individually not worth a person's attention but collectively add up,
@@ -52,6 +97,18 @@ objective, carried on over text. This also extends naturally to targets where te
 is simply the better channel (e.g. a vendor that explicitly prefers SMS), not only
 as a last resort for unreachable ones.
 
+The eligibility profile (§2) rides along through that loop: the router adds
+cohort-specific asks to each script ("is there a student rate?"), and the
+aggregator shows the quote with and without the discount so the saving is visible.
+For today only the `student` profile is built; the profile is a plain config
+object so a second cohort can be shown as a one-line swap if time allows.
+
+**Ledger (§2.1) scope for today:** every completed call writes a ledger entry
+(vendor, rate, promo end, renewal date, next action), and the dashboard shows
+those entries as a timeline of upcoming actions. One trigger is wired end to end:
+promo expiry → notification → user approves → retention call. Bill ingestion
+(email/bank), claim tracking, and the other triggers are roadmap, not built.
+
 ## 4. Demo mechanic
 
 Submission is a **recorded video**, not a live on-stage call. This removes the
@@ -60,6 +117,16 @@ IVR unpredictability eating a timed demo slot) — calls can be placed ahead of 
 against our own controlled test line(s) and/or real low-risk targets, recorded, and
 edited into the submission. Still show the parallel-dispatch moment on screen
 (N calls, concurrent status, results landing) since that's the actual thesis.
+
+**Demo scenario:** a student types "I'm moving into my first apartment near
+campus on the 1st, handle it." Dormammu fans out ISP quotes, renters insurance
+quotes, and a dentist booking in parallel, and the results table shows the
+student rate each vendor gave only because the agent asked.
+
+**Second act (the retention beat):** cut to "11 months later." The ledger
+timeline shows the ISP promo expiring in 21 days. The user taps approve,
+Dormammu calls retention on the test line and keeps the rate, and the ledger
+updates. This is what answers "isn't this a one-time tool?"
 
 ## 5. Core services
 
@@ -86,6 +153,9 @@ agents are first-class entities in its data model.
 - Feed those patterns back into the per-track call scripts/prompts — this is the
   "continually improve the agentic stack" loop: Keewano powers the analysis step,
   we close the loop by updating prompts/logic based on what it surfaces.
+- The same sequences, aggregated across users, are what make the ledger (§2.1)
+  smarter over time: what a given vendor's retention line actually concedes, and
+  what rate comparable students ended up with.
 - Honest scope note: Keewano analyzes and surfaces patterns, it does not
   auto-rewrite prompts. The improvement loop is Keewano-informed, not fully
   autonomous — state this plainly in the pitch rather than overclaiming.
@@ -113,6 +183,8 @@ their booth/Discord at the event for a demo API key or sandbox dataset.
 call at a time, one domain — usually bills). Dormammu's fan-out mechanic — N
 simultaneous calls across arbitrary phone-gated tasks, aggregated back into one
 result — was not found in any competitor. That is the core unique claim.
+Secondary: none of them are cohort-aware. They negotiate the generic rate rather
+than asking for the discounts a specific user is actually eligible for.
 
 ## 8. Open questions / risks
 
@@ -123,6 +195,20 @@ result — was not found in any competitor. That is the core unique claim.
 - Recording-consent rules apply even for a pre-recorded demo if real vendors/humans
   are called and included in the submitted video — get verbal consent on-call or
   use our own test line's human to stay safe.
+
+- Student discounts are often claimed online (UNiDAYS/SheerID-style verification),
+  not by phone. The pitch should not lean on "we unlock student discounts" alone;
+  the discount is a lever inside calls that are phone-gated for other reasons.
+  Fixture vendors should each have a student rate that only surfaces when asked.
+- The monthly trigger (bill higher than ledger rate) needs bill data we don't
+  have today: email parsing or a bank/card connection. Without it, the triggers
+  we can fire from call data alone are date-based (promo end, renewal,
+  appointment recurrence), which are infrequent. Be honest in the pitch that
+  monthly cadence depends on that ingestion step.
+- Risk of the ledger being a passive list nobody opens. The mitigation is that
+  it pushes actions to the user rather than waiting to be checked.
+- Vendors may require proof of enrollment the agent cannot supply mid-call. For
+  the demo, have the agent capture "what proof is needed" as a follow-up item.
 
 ## Appendix: without Dormammu
 
