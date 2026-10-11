@@ -7,7 +7,7 @@ import { summarizeOutcome } from "@/components/calls/summary";
 import { AppShell, PageTitle } from "@/components/shell";
 import { Dot, ErrorNote, Loading, stateWord, Tag, Wave } from "@/components/ui";
 import { getLedger, getRecentRuns, getRun, tickRun } from "@/lib/api";
-import { describeError, EM, fmtDay, fmtDuration, fmtSlot, fmtStampFull, fmtUsd, maskPhone, parseTs } from "@/lib/format";
+import { describeError, EM, fmtDay, fmtDuration, fmtSlot, fmtStampFull, fmtUsd, maskPhone, parseTs, tidy } from "@/lib/format";
 import { isTerminal, trackLabel, type AssembledRun, type Call, type LedgerRow } from "@/lib/types";
 
 const TICK_MS = 2000;
@@ -154,7 +154,7 @@ export function CallView({ callId, runId }: { callId: string; runId: string | nu
   const tone = s.tone === "ok" ? "t-talking" : s.tone === "warn" || s.tone === "bad" ? "t-ringing" : s.tone === "muted" ? "t-muted" : "";
 
   const head = (
-    <PageTitle back={{ href: `/runs/${run.id}`, label: run.request.length > 60 ? run.request.slice(0, 57) + "…" : run.request }} title={call.target_name}>
+    <PageTitle back={{ href: `/runs/${run.id}`, label: tidy(run.request).length > 60 ? tidy(run.request).slice(0, 57) + "…" : tidy(run.request) }} title={call.target_name}>
       <p className={`outcome num rise ${tone}`.trim()} style={d(".2s")}>
         {s.main}
         {call.state === "talking" ? <Wave /> : null}
@@ -255,7 +255,7 @@ export function CallView({ callId, runId }: { callId: string; runId: string | nu
                     <dt>{r.kind.replace("_", " ")}</dt>
                     <dd>
                       <span>
-                        {r.label}
+                        {tidy(r.label)}
                         <small className="verified" style={{ display: "block", marginTop: 4 }}>
                           {r.amount_usd !== null ? `${fmtUsd(r.amount_usd)} · ` : ""}
                           {r.expires_on ? `until ${fmtDay(r.expires_on)}` : r.effective_on ? `from ${fmtDay(r.effective_on)}` : "undated"}

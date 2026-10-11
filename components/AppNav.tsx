@@ -31,7 +31,7 @@ const ICONS = [
 ];
 
 // Pages that carry their own chrome (the auth flow) and never show the signed-in nav.
-const HIDDEN_ON = ["/login", "/auth", "/onboarding"];
+const HIDDEN_ON = ["/login", "/auth", "/onboarding", "/present"];
 
 /**
  * The signed-in nav from the prototype's app pages: brand, glass pill of links, avatar. The server

@@ -61,7 +61,7 @@ def build_profile(args: argparse.Namespace) -> dict:
             "budget_ceiling_usd": args.budget,
             "current_providers": providers,
             "insurance": {"dental": args.dental, "health": None},
-            "student_proof": "stanford.edu email on file",
+            "student_proof": "school.edu email on file",
             "preferred_times": ["weekday afternoons"],
             "caller_name": "Alex",
         },

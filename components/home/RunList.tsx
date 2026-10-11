@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Dot } from "@/components/ui";
-import { fmtStamp } from "@/lib/format";
+import { fmtStamp, tidy } from "@/lib/format";
 import type { RunListItem } from "@/lib/types";
 
 function callCount(run: RunListItem): string {
@@ -41,8 +41,8 @@ export function RunList({ runs }: { runs: RunListItem[] | null }) {
       {runs.map((run) => (
         <Link key={run.id} href={`/runs/${run.id}`} className="mini">
           <Dot state={dotState(run.status)} />
-          <span className="who" title={run.request}>
-            {run.request}
+          <span className="who" title={tidy(run.request)}>
+            {tidy(run.request)}
           </span>
           <span className="st">
             {STATUS_WORD[run.status] ?? run.status} · {callCount(run)}
