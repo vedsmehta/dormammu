@@ -354,3 +354,23 @@ export const getInsights = () => pyFetch<InsightsReport>("/insights");
  * may not exist on the deployed API yet; callers treat a 404 or 405 ApiError as "not deployed".
  */
 export const createLedgerRow = (row: import("@/lib/types").NewLedgerRow) => post<LedgerRow>("/ledger", row);
+
+// ---------------------------------------------------------------------------------------------
+// Research first: POST /research -> proposal -> approve items -> run (docs/CONTRACT.md "Proposals")
+// ---------------------------------------------------------------------------------------------
+
+/** Runs the research engine over the profile, the request and the roster. 20 to 60 s; nothing is dialed. */
+export const research = (request: string) => post<import("@/lib/types").Proposal>("/research", { request });
+
+/** The user's proposals, newest first, without bodies. */
+export const getProposals = (limit = 20) =>
+  pyFetch<import("@/lib/types").ProposalListItem[]>(`/proposals?limit=${encodeURIComponent(limit)}`);
+
+export const getProposal = (id: string) => pyFetch<import("@/lib/types").Proposal>(`/proposals/${encodeURIComponent(id)}`);
+
+/** Turns the checked items into vendor rows and one run. Items without a verified phone come back in `skipped`. */
+export const approveProposal = (id: string, itemIds: string[]) =>
+  post<import("@/lib/types").ProposalApproveResult>(`/proposals/${encodeURIComponent(id)}/approve`, { item_ids: itemIds });
+
+export const rejectProposal = (id: string) =>
+  post<import("@/lib/types").Proposal>(`/proposals/${encodeURIComponent(id)}/reject`, {});
