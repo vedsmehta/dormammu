@@ -5,7 +5,17 @@ import { NextResponse, type NextRequest } from "next/server";
 // page request and bounces signed-out visitors away from the two pages that need an API session.
 // When NEXT_PUBLIC_SUPABASE_URL is empty (dev mode, Python uses DEV_USER_ID) it does nothing.
 
-const PROTECTED = ["/onboarding", "/runs", "/calls", "/ledger", "/profile", "/insights", "/evidence"];
+const PROTECTED = [
+  "/onboarding",
+  "/runs",
+  "/calls",
+  "/ledger",
+  "/profile",
+  "/insights",
+  "/evidence",
+  "/research",
+  "/calendar",
+];
 
 export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

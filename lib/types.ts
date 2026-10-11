@@ -147,12 +147,52 @@ export interface Availability {
   end: string;
 }
 
+export interface Address {
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}
+
+export type Bedrooms = "studio" | "1" | "2" | "3+";
+export const BEDROOMS: Bedrooms[] = ["studio", "1", "2", "3+"];
+
+export type ProviderCategory = "internet" | "phone" | "gym" | "insurance" | "utilities" | "streaming" | "other";
+export const PROVIDER_CATEGORIES: ProviderCategory[] = ["internet", "phone", "gym", "insurance", "utilities", "streaming", "other"];
+
+/** Something the user already pays for. The research stage reads these before any call. */
+export interface CurrentProvider {
+  category: ProviderCategory;
+  name: string;
+  monthly_usd: number | null;
+  contract_end?: string | null;
+}
+
+export interface Insurance {
+  dental?: string | null;
+  health?: string | null;
+}
+
+/**
+ * Everything the agent and the research stage know about the user. Keys are spelled exactly as the
+ * research engine reads them; unknown keys round-trip untouched.
+ */
 export interface Prefs {
   budget_ceiling_usd?: number | null;
   preferred_times?: string[];
   availability?: Availability[];
   /** The name the agent introduces itself with on calls. Empty means the server default (Alex). */
   caller_name?: string | null;
+  current_address?: Address | null;
+  new_address?: Address | null;
+  /** YYYY-MM-DD */
+  move_date?: string | null;
+  bedrooms?: Bedrooms | null;
+  household_size?: number | null;
+  current_providers?: CurrentProvider[];
+  insurance?: Insurance | null;
+  /** Free text, e.g. "stanford.edu email on file". */
+  student_proof?: string | null;
   [key: string]: unknown;
 }
 
@@ -195,4 +235,13 @@ export interface LedgerRow {
   created_at: string;
   // Optional join the backend may add so the UI can link the source call to its run.
   run_id?: string | null;
+}
+
+/** Body for POST /ledger (manual bookings from the calendar). Dates are YYYY-MM-DD. */
+export interface NewLedgerRow {
+  kind: LedgerKind;
+  label: string;
+  effective_on: string | null;
+  expires_on: string | null;
+  amount_usd: number | null;
 }
