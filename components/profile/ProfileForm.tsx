@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { fromSlots, toSlots, type Slot } from "@/components/profile/availability";
-import { AvailabilityEditor } from "@/components/profile/AvailabilityEditor";
+import { AvailabilityEditor, checkSlots } from "@/components/profile/AvailabilityEditor";
 import { AppShell } from "@/components/shell";
 import { Button, ErrorNote, Field, Loading } from "@/components/ui";
 import { getProfile, upsertProfile } from "@/lib/api";
 import { describeError, fmtDay, initials, maskPhone } from "@/lib/format";
 import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
 import { COHORTS, DEFAULT_CALLER_NAME, type Prefs, type Profile } from "@/lib/types";
+import { checkNumber, checkPhone, collect, countNote, focusFirstInvalid, normalizePhone } from "@/lib/validate";
 
 const d = (s: string) => ({ "--d": s }) as CSSProperties;
 
@@ -45,6 +46,18 @@ export function ProfileForm() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const validate = () =>
+    collect({
+      displayName: displayName.trim().length > 120 ? "Keep the name under 120 characters." : null,
+      phone: checkPhone(phone),
+      budget: checkNumber(budget, { min: 0, what: "The budget ceiling" }),
+      ...checkSlots(slots),
+    });
+  // Nothing is flagged until the first save attempt; after that, messages follow the typing.
+  const errors = submitted ? validate() : {};
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +101,13 @@ export function ProfileForm() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
+    setSubmitted(true);
+    setSavedAt(null);
+    if (Object.keys(validate()).length) {
+      setError(null);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -101,11 +121,13 @@ export function ProfileForm() {
       };
       const saved = await upsertProfile({
         display_name: displayName.trim() || null,
-        phone: phone.trim() || null,
+        phone: normalizePhone(phone),
         cohort,
         prefs,
       });
       setProfile(saved);
+      setPhone(saved.phone ?? "");
+      setSubmitted(false);
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err) {
       setError(describeError(err));
@@ -147,13 +169,13 @@ export function ProfileForm() {
       <ErrorNote message={loadError} />
       {!profile && !loadError ? <Loading>Loading profile…</Loading> : null}
 
-      <form onSubmit={save}>
+      <form ref={formRef} onSubmit={save} noValidate>
         <Section title="About you" lede="Who the agent says it is calling for.">
           <div className="fields-2">
-            <Field label="Name">
+            <Field label="Name" error={errors.displayName}>
               <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" />
             </Field>
-            <Field label="Mobile" hint="For transfers and callbacks. Shown masked everywhere else.">
+            <Field label="Mobile" hint="For transfers and callbacks. Shown masked everywhere else." error={errors.phone}>
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 415 555 0100" autoComplete="tel" />
             </Field>
           </div>
@@ -196,7 +218,7 @@ export function ProfileForm() {
             <Field label="Name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
               <input type="text" value={callerName} onChange={(e) => setCallerName(e.target.value)} placeholder={DEFAULT_CALLER_NAME} />
             </Field>
-            <Field label="Budget ceiling (USD)" hint="The agent brings anything above this back to you instead of accepting.">
+            <Field label="Budget ceiling (USD)" hint="The agent brings anything above this back to you instead of accepting." error={errors.budget}>
               <input type="number" min={0} step={1} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="900" className="num" />
             </Field>
           </div>
@@ -229,7 +251,7 @@ export function ProfileForm() {
               ))}
             </ul>
           ) : null}
-          <AvailabilityEditor slots={slots} onChange={setSlots} />
+          <AvailabilityEditor slots={slots} onChange={setSlots} errors={errors} />
         </Section>
 
         <Section title="Account">
@@ -270,7 +292,7 @@ export function ProfileForm() {
             {busy ? "Saving…" : "Save profile"}
           </Button>
           {savedAt ? <span className="saved-at">Saved at {savedAt}</span> : null}
-          <ErrorNote message={error} />
+          <ErrorNote message={error ?? countNote(errors)} />
         </div>
       </form>
     </AppShell>

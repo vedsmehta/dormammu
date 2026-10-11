@@ -11,7 +11,7 @@ import { RunResults } from "@/components/run/RunResults";
 import { AppShell } from "@/components/shell";
 import { ErrorNote, StatusChip, Tag } from "@/components/ui";
 import { ApiError, getRun, tickRun } from "@/lib/api";
-import { fmtDuration, parseTs } from "@/lib/format";
+import { fmtDuration, parseTs, tidy } from "@/lib/format";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isTerminal, TRACK_ORDER, trackLabel, type AssembledRun, type Call, type Track } from "@/lib/types";
 
@@ -220,7 +220,7 @@ export function RunView({ runId }: { runId: string }) {
       {run ? (
         <>
           <p className="glass-pill rise" style={d(".1s")}>
-            “{run.request}”
+            “{tidy(run.request)}”
           </p>
           <p className="live num rise" style={d(".2s")}>
             {active ? <span className="dot talking" aria-hidden="true" /> : null}
@@ -290,9 +290,15 @@ export function RunView({ runId }: { runId: string }) {
               <span className={failed > 0 ? "t-warn" : undefined}>{failed} failed</span>
             </p>
 
+            {run.booking_of?.run_id ? (
+              <p className="note">
+                This is a booking call for options you chose. <Link href={`/runs/${run.booking_of.run_id}`}>See the options it came from</Link>. Confirmed
+                times go on your <Link href="/calendar">calendar</Link>.
+              </p>
+            ) : null}
             {!active && run.aggregate ? (
               <div className="group">
-                <RunResults aggregate={run.aggregate} wallSeconds={wall} />
+                <RunResults aggregate={run.aggregate} wallSeconds={wall} runId={run.id} bookings={run.bookings ?? []} />
               </div>
             ) : null}
 

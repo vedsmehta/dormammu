@@ -75,6 +75,12 @@ class ProposalApprove(BaseModel):
     item_ids: list[str] = Field(min_length=1, max_length=50)
 
 
+class OptionChoose(BaseModel):
+    """POST /runs/{id}/choose: the finished calls whose offers the user wants confirmed and booked."""
+
+    call_ids: list[str] = Field(min_length=1, max_length=20)
+
+
 class LedgerFire(BaseModel):
     as_of: str = Field(min_length=10)
 

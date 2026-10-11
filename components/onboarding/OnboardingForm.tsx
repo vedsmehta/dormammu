@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { fromSlots, toSlots, type Slot } from "@/components/profile/availability";
-import { AvailabilityEditor } from "@/components/profile/AvailabilityEditor";
+import { AvailabilityEditor, checkSlots } from "@/components/profile/AvailabilityEditor";
 import { AuthShell, Progress } from "@/components/shell";
-import { ErrorNote, Field } from "@/components/ui";
+import { ErrorNote, Field, FieldError } from "@/components/ui";
 import { getProfile, getVendors, research, upsertProfile, upsertVendors } from "@/lib/api";
 import { describeError } from "@/lib/format";
 import {
@@ -31,6 +31,8 @@ const DEFAULT_VENDORS: Vendor[] = [
   { key: "dentist", name: "Dr. Chen Dental", track: "schedule", phone: "", is_demo: true },
   { key: "internet_retention", name: "Comcast Retention", track: "negotiate", phone: "", is_demo: true },
 ];
+
+import { checkNumber, checkPhone, checkZip, collect, countNote, focusFirstInvalid, normalizePhone } from "@/lib/validate";
 
 const TRACKS: Track[] = ["quote", "schedule", "negotiate"];
 
@@ -88,14 +90,14 @@ async function fetchVendors(city: string, state: string): Promise<Vendor[]> {
   const row = await research(`I'm moving to ${where}: find movers, internet, renters insurance and a dentist`);
   const seen = new Set<string>();
   return (row.proposal?.items ?? [])
-    .filter((it) => it.phone_verified && !it.skip_reason && it.vendor.phone)
+    .filter((it) => it.phone_verified && !it.skip_reason && it.vendor?.phone)
     .sort((a, b) => Number(b.recommended) - Number(a.recommended))
-    .filter((it) => (seen.has(it.vendor.phone!) ? false : (seen.add(it.vendor.phone!), true)))
-    .map((it) => ({ key: it.vendor.key, name: it.vendor.name, track: it.track, phone: it.vendor.phone!, is_demo: false }));
+    .filter((it) => (seen.has(it.vendor!.phone!) ? false : (seen.add(it.vendor!.phone!), true)))
+    .map((it) => ({ key: `r_${it.category ?? "vendor"}_${(it.vendor!.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "_")}`.slice(0, 60), name: it.vendor!.name ?? "Vendor", track: it.track ?? "quote", phone: it.vendor!.phone!, is_demo: false }));
 }
 
 /** Street, city, state, zip as four underline fields. */
-function AddressFields({ legend, value, onChange }: { legend: string; value: AddressDraft; onChange: (a: AddressDraft) => void }) {
+function AddressFields({ legend, value, onChange, zipError }: { legend: string; value: AddressDraft; onChange: (a: AddressDraft) => void; zipError?: string }) {
   const set = (patch: Partial<AddressDraft>) => onChange({ ...value, ...patch });
   return (
     <fieldset className="field">
@@ -111,11 +113,34 @@ function AddressFields({ legend, value, onChange }: { legend: string; value: Add
           <input type="text" value={value.state} onChange={(e) => set({ state: e.target.value })} autoComplete="address-level1" />
         </Field>
       </div>
-      <Field label="ZIP" tight>
+      <Field label="ZIP" tight error={zipError}>
         <input type="text" value={value.zip} onChange={(e) => set({ zip: e.target.value })} autoComplete="postal-code" inputMode="numeric" className="num" />
       </Field>
     </fieldset>
   );
+}
+
+/** A row in "what you pay for now". A row with no name would be dropped, so say so instead. */
+function checkProvider(p: ProviderDraft): string | null {
+  const started = Boolean(p.monthly_usd.trim() || p.contract_end);
+  if (!p.name.trim()) return started ? "Add the provider's name, or remove this row." : null;
+  return checkNumber(p.monthly_usd, { min: 0, what: "The monthly cost" });
+}
+
+/** True when a roster row has a name and key but no phone yet: allowed, but not saved or dialable. */
+const lacksPhone = (v: Vendor) => Boolean(v.name.trim() && v.key.trim() && !v.phone.trim());
+
+/** A roster row. Fully blank rows are ignored; a half-filled one says what is missing. */
+function checkVendor(v: Vendor, all: Vendor[]): string | null {
+  const name = v.name.trim();
+  const key = v.key.trim();
+  const phone = v.phone.trim();
+  if (!name && !key && !phone) return null;
+  if (!name) return "Add the vendor's name, or remove this row.";
+  if (!key) return "Add a short key for this vendor, like movers_a.";
+  if (!/^[a-z0-9_-]+$/i.test(key)) return "The key can only use letters, numbers, _ and -.";
+  if (all.filter((o) => o.key.trim().toLowerCase() === key.toLowerCase()).length > 1) return "Two vendors share this key. Each key must be different.";
+  return checkPhone(phone);
 }
 
 export function OnboardingForm() {
@@ -144,6 +169,23 @@ export function OnboardingForm() {
   const [filling, setFilling] = useState(false);
   const [fillNote, setFillNote] = useState<string | null>(null);
   const [filledFor, setFilledFor] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const validate = () =>
+    collect({
+      displayName: displayName.trim().length > 120 ? "Keep the name under 120 characters." : null,
+      phone: checkPhone(phone),
+      currentZip: checkZip(currentAddress.zip),
+      newZip: checkZip(newAddress.zip),
+      household: checkNumber(householdSize, { min: 1, whole: true, what: "The household size" }),
+      budget: checkNumber(budget, { min: 0, what: "The budget ceiling" }),
+      ...Object.fromEntries(providers.map((p, i) => [`prov.${i}`, checkProvider(p)])),
+      ...Object.fromEntries(vendors.map((v, i) => [`ven.${i}`, checkVendor(v, vendors)])),
+      ...checkSlots(slots),
+    });
+  // Nothing is flagged until the first save attempt; after that, messages follow the typing.
+  const errors = submitted ? validate() : {};
 
   useEffect(() => {
     let cancelled = false;
@@ -244,6 +286,12 @@ export function OnboardingForm() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
+    setSubmitted(true);
+    if (Object.keys(validate()).length) {
+      setError(null);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -265,20 +313,21 @@ export function OnboardingForm() {
       };
       await upsertProfile({
         display_name: displayName.trim() || null,
-        phone: phone.trim() || null,
+        phone: normalizePhone(phone),
         cohort,
         prefs,
       });
+      // The service requires a phone on every vendor, so rows without one stay in the form only.
       const roster = vendors
-        .filter((v) => v.key.trim() && v.name.trim())
+        .filter((v) => v.key.trim() && v.name.trim() && v.phone.trim())
         .map((v) => ({
           key: v.key.trim(),
           name: v.name.trim(),
           track: v.track,
-          phone: v.phone.trim(),
+          phone: normalizePhone(v.phone) ?? v.phone.trim(),
           is_demo: Boolean(v.is_demo),
         }));
-      await upsertVendors(roster);
+      if (roster.length) await upsertVendors(roster);
       setSaved(true);
     } catch (err) {
       setError(describeError(err));
@@ -316,7 +365,7 @@ export function OnboardingForm() {
     <AuthShell wide>
       <Progress step={1} />
 
-      <form onSubmit={save}>
+      <form ref={formRef} onSubmit={save} noValidate>
         <h1>Set up your profile</h1>
         <p>
           This is what the agent knows about you before it researches or calls anyone. Your profile decides which discounts it asks for,
@@ -326,10 +375,10 @@ export function OnboardingForm() {
         {!loaded ? <p className="dash-note">Loading…</p> : null}
 
         <div className="fields-2">
-          <Field label="Name the agent calls on behalf of">
+          <Field label="Name the agent calls on behalf of" error={errors.displayName}>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" placeholder="Maya Patel" />
           </Field>
-          <Field label="Your mobile" hint="For transfers and callbacks.">
+          <Field label="Your mobile" hint="For transfers and callbacks." error={errors.phone}>
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 415 555 0100" autoComplete="tel" />
           </Field>
         </div>
@@ -349,18 +398,18 @@ export function OnboardingForm() {
             {COHORTS[0].proof}.
           </p>
         </fieldset>
-        <Field label="Proof of student status" hint="What the agent can say is on file, e.g. “stanford.edu email on file”.">
-          <input type="text" value={studentProof} onChange={(e) => setStudentProof(e.target.value)} placeholder="stanford.edu email on file" />
+        <Field label="Proof of student status" hint="What the agent can say is on file, e.g. “school.edu email on file”.">
+          <input type="text" value={studentProof} onChange={(e) => setStudentProof(e.target.value)} placeholder="school.edu email on file" />
         </Field>
 
-        <AddressFields legend="Where you live now" value={currentAddress} onChange={setCurrentAddress} />
-        <AddressFields legend="Where you are moving" value={newAddress} onChange={setNewAddress} />
+        <AddressFields legend="Where you live now" value={currentAddress} onChange={setCurrentAddress} zipError={errors.currentZip} />
+        <AddressFields legend="Where you are moving" value={newAddress} onChange={setNewAddress} zipError={errors.newZip} />
 
         <div className="fields-2">
           <Field label="Move date">
             <input type="date" value={moveDate} onChange={(e) => setMoveDate(e.target.value)} className="num" />
           </Field>
-          <Field label="People in the household">
+          <Field label="People in the household" error={errors.household}>
             <input type="number" min={1} step={1} value={householdSize} onChange={(e) => setHouseholdSize(e.target.value)} placeholder="1" className="num" />
           </Field>
         </div>
@@ -384,7 +433,7 @@ export function OnboardingForm() {
               <li key={i}>
                 <label>
                   <span className="lbl">Name</span>
-                  <input className="input" value={p.name} onChange={(e) => updateProvider(i, { name: e.target.value })} aria-label="provider name" />
+                  <input className="input" value={p.name} onChange={(e) => updateProvider(i, { name: e.target.value })} aria-label="provider name" aria-invalid={(Boolean(errors[`prov.${i}`]) && !p.name.trim()) || undefined} />
                 </label>
                 <label>
                   <span className="lbl">Category</span>
@@ -398,7 +447,7 @@ export function OnboardingForm() {
                 </label>
                 <label>
                   <span className="lbl">$ per month</span>
-                  <input className="input num" type="number" min={0} step={1} value={p.monthly_usd} onChange={(e) => updateProvider(i, { monthly_usd: e.target.value })} aria-label="monthly cost" />
+                  <input className="input num" type="number" min={0} step={1} value={p.monthly_usd} onChange={(e) => updateProvider(i, { monthly_usd: e.target.value })} aria-label="monthly cost" aria-invalid={(Boolean(errors[`prov.${i}`]) && Boolean(p.name.trim())) || undefined} />
                 </label>
                 <label>
                   <span className="lbl">Contract ends</span>
@@ -408,6 +457,7 @@ export function OnboardingForm() {
                 <button type="button" className="rm" onClick={() => removeProvider(i)} aria-label="remove provider">
                   ×
                 </button>
+                <FieldError message={errors[`prov.${i}`]} />
               </li>
             ))}
           </ul>
@@ -429,12 +479,12 @@ export function OnboardingForm() {
           <Field label="Name the agent uses on calls" hint={`Blank means ${DEFAULT_CALLER_NAME}. It always says it is an AI first.`}>
             <input type="text" value={callerName} onChange={(e) => setCallerName(e.target.value)} placeholder={DEFAULT_CALLER_NAME} />
           </Field>
-          <Field label="Budget ceiling (USD)">
+          <Field label="Budget ceiling (USD)" error={errors.budget}>
             <input type="number" min={0} step={1} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="900" className="num" />
           </Field>
         </div>
 
-        <AvailabilityEditor slots={slots} onChange={setSlots} />
+        <AvailabilityEditor slots={slots} onChange={setSlots} errors={errors} />
 
         <fieldset className="field">
           <legend>Who Dormammu will call</legend>
@@ -449,15 +499,19 @@ export function OnboardingForm() {
           </p>
           {fillNote ? <p className="note">{fillNote}</p> : null}
           <ul className="roster">
-            {vendors.map((v, i) => (
+            {vendors.map((v, i) => {
+              const err = errors[`ven.${i}`];
+              // Point at the first thing wrong in the row: name, then key, then phone.
+              const bad = !err ? null : !v.name.trim() ? "name" : /key/i.test(err) ? "key" : "phone";
+              return (
               <li key={i}>
                 <label>
                   <span className="lbl">Name</span>
-                  <input className="input" value={v.name} onChange={(e) => updateVendor(i, { name: e.target.value })} aria-label="vendor name" />
+                  <input className="input" value={v.name} onChange={(e) => updateVendor(i, { name: e.target.value })} aria-label="vendor name" aria-invalid={bad === "name" || undefined} />
                 </label>
                 <label>
                   <span className="lbl">Key</span>
-                  <input className="input" value={v.key} onChange={(e) => updateVendor(i, { key: e.target.value })} aria-label="vendor key" />
+                  <input className="input" value={v.key} onChange={(e) => updateVendor(i, { key: e.target.value })} aria-label="vendor key" aria-invalid={bad === "key" || undefined} />
                 </label>
                 <label>
                   <span className="lbl">Track</span>
@@ -471,7 +525,7 @@ export function OnboardingForm() {
                 </label>
                 <label>
                   <span className="lbl">Phone</span>
-                  <input className="input num" value={v.phone} onChange={(e) => updateVendor(i, { phone: e.target.value })} placeholder="+1…" autoComplete="off" aria-label="vendor phone" />
+                  <input className="input num" value={v.phone} onChange={(e) => updateVendor(i, { phone: e.target.value })} placeholder="+1…" autoComplete="off" aria-label="vendor phone" aria-invalid={bad === "phone" || undefined} />
                 </label>
                 <label className="demo">
                   <input type="checkbox" checked={v.is_demo} onChange={(e) => updateVendor(i, { is_demo: e.target.checked })} aria-label="demo vendor" />
@@ -480,15 +534,17 @@ export function OnboardingForm() {
                 <button type="button" className="rm" onClick={() => removeVendor(i)} aria-label="remove vendor">
                   ×
                 </button>
+                {err ? <FieldError message={err} /> : lacksPhone(v) ? <span className="hint">No phone yet, so this vendor will not be saved or called.</span> : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
           <button type="button" className="add" onClick={addVendor}>
             + Add a vendor
           </button>
         </fieldset>
 
-        <ErrorNote message={error} />
+        <ErrorNote message={error ?? countNote(errors)} />
         <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
           {busy ? "Saving…" : "Finish setup"}
         </button>

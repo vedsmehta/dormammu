@@ -8,7 +8,7 @@ import { fromSlots, toSlots, type Slot } from "@/components/profile/availability
 import { AppShell, PageTitle } from "@/components/shell";
 import { Button, ErrorNote, Field, Loading, Tag } from "@/components/ui";
 import { ApiError, createLedgerRow, fireLedger, getCalls, getLedger, getProfile, upsertProfile, type CallWithRequest } from "@/lib/api";
-import { describeError, fmtDay } from "@/lib/format";
+import { describeError, fmtDay, tidy } from "@/lib/format";
 import type { LedgerRow, Profile } from "@/lib/types";
 
 import {
@@ -37,10 +37,9 @@ function EventChip({ ev }: { ev: CalEvent }) {
       {ev.time ? <b>{ev.time}</b> : null}
       {ev.kind === "quote" ? "Quote until: " : ev.kind === "due" ? "Due: " : ""}
       {ev.title}
-      {ev.seeded ? <span className="seed">seeded</span> : null}
     </>
   );
-  const title = `${KIND_LABEL[ev.kind]}: ${ev.title}${ev.detail ? ` · ${ev.detail}` : ""}${ev.seeded ? " (seeded)" : ""}`;
+  const title = `${KIND_LABEL[ev.kind]}: ${ev.title}${ev.detail ? ` · ${ev.detail}` : ""}`;
   if (!ev.href) {
     return (
       <span className={`cal-ev ${ev.kind}`} title={title}>
@@ -456,7 +455,7 @@ export function CalendarView() {
                         <time dateTime={r.expires_on ?? undefined}>{fmtDay(r.expires_on)}</time>
                         <div className="row">
                           <span className={`k ${r.kind === "quote" ? "quote" : "due"}`} aria-hidden />
-                          <span>{r.label}</span>
+                          <span>{tidy(r.label)}</span>
                           <span className="sub">{r.kind.replace("_", " ")}</span>
                         </div>
                       </li>

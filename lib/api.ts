@@ -1,5 +1,5 @@
 import { getSupabaseBrowser } from "@/lib/supabase/client";
-import type { AssembledRun, Call, LedgerRow, Profile, ResearchItem, RunListItem, Vendor } from "@/lib/types";
+import type { AssembledRun, Call, LedgerRow, Profile, Proposal, RunListItem, Vendor } from "@/lib/types";
 
 // Browser-side client for the Python service. Every call goes to /api/py/..., which next.config
 // rewrites to uvicorn in dev and to the Vercel Python function in production. The Supabase access
@@ -46,12 +46,20 @@ function post<T>(path: string, body: unknown): Promise<T> {
 
 export const getRuns = () => pyFetch<RunListItem[]>("/runs");
 export const createRun = (request: string) => post<AssembledRun>("/runs", { request });
+// Research first: nothing is dialed until the user approves items on the proposal.
+export const research = (request: string) => post<Proposal>("/research", { request });
+export const getProposal = (id: string) => pyFetch<Proposal>(`/proposals/${encodeURIComponent(id)}`);
+export const approveProposal = (id: string, item_ids: string[]) =>
+  post<{ run: AssembledRun; skipped: { item_id: string; reason: string }[]; external_calls_enabled: boolean }>(
+    `/proposals/${encodeURIComponent(id)}/approve`,
+    { item_ids },
+  );
+export const rejectProposal = (id: string) => post<Proposal>(`/proposals/${encodeURIComponent(id)}/reject`, {});
+/** "Which ones do you want to go with?": one booking call per chosen option, as a new run. */
+export const chooseOptions = (runId: string, call_ids: string[]) =>
+  post<{ run: AssembledRun; skipped: { call_id: string; reason: string }[] }>(`/runs/${encodeURIComponent(runId)}/choose`, { call_ids });
 export const getRun = (id: string) => pyFetch<AssembledRun>(`/runs/${encodeURIComponent(id)}`);
 export const tickRun = (id: string) => post<AssembledRun>(`/runs/${encodeURIComponent(id)}/tick`, {});
-
-/** Research (server/app.py POST /research): verified vendors with sourced phones; nothing is dialed. */
-export const research = (request: string) =>
-  post<{ id: string; proposal: { items: ResearchItem[]; errors?: string[] } }>("/research", { request });
 
 export const getVendors = () => pyFetch<Vendor[]>("/vendors");
 export const upsertVendors = (vendors: Vendor[]) => post<Vendor[]>("/vendors", { vendors });
@@ -137,6 +145,22 @@ export interface EvidenceReport {
     fallback_event_type_id: string | null;
     ingress_url: string | null;
     auth_hint: string | null;
+  };
+  /** The self-improvement loop: calls that opened with what earlier calls learned. */
+  loop?: {
+    n_calls: number;
+    n_with_prior_context: number;
+    n_context_applied_events: number;
+    examples: { call_id: string | null; run_id: string | null; target_name: string | null; track: string | null; prior_context: string; simulated: boolean }[];
+    context_effect: {
+      n_repeat_vendors?: number;
+      n_later_calls?: number;
+      n_later_with_prior_context?: number;
+      quote?: { n_vendors?: number; later_lower_by_usd?: number | null } | null;
+      negotiate?: { n_vendors?: number; later_saved_more_usd?: number | null } | null;
+    } | null;
+    n_recommendations: number | null;
+    error: string | null;
   };
   events: {
     by_type: Record<string, number>;

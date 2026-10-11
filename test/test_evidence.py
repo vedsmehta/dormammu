@@ -333,7 +333,7 @@ def test_evidence_shape_dial_events_and_counts(client):
     r = c.get(f"{P}/evidence")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == {"dial", "keewano", "events", "calls", "policy", "build", "generated_at"}
+    assert set(body) == {"dial", "keewano", "loop", "events", "calls", "policy", "build", "generated_at"}
     _assert_no_leak(r.text)
 
     dial = body["dial"]

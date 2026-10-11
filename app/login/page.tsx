@@ -2,30 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { AuthShell, Progress } from "@/components/shell";
 import { ErrorNote, Field } from "@/components/ui";
 import { ApiError, getVendors, signup } from "@/lib/api";
+import { describeError } from "@/lib/format";
 import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
+import { checkEmail, checkPassword, collect, focusFirstInvalid, type Errors } from "@/lib/validate";
 
 type Mode = "signin" | "signup";
 
 const MIN_PASSWORD = 8;
 
-/** Pull the JSON "detail" out of a FastAPI error body, else fall back to the raw text. */
-function apiMessage(err: unknown): string {
-  if (err instanceof ApiError) {
-    try {
-      const parsed = JSON.parse(err.body) as { detail?: unknown };
-      if (typeof parsed.detail === "string") return parsed.detail;
-    } catch {
-      // not JSON; fall through
-    }
-    return err.body.slice(0, 200) || `request failed (${err.status})`;
-  }
-  if (err instanceof Error) return err.message;
-  return "something went wrong";
+/** Supabase's sign-in errors, reworded so they say what to do next. */
+function signInMessage(message: string): string {
+  if (/invalid login credentials/i.test(message)) return "That email and password don't match an account. Check both, or create an account.";
+  if (/email not confirmed/i.test(message)) return "That email has not been confirmed yet.";
+  if (/rate limit|too many/i.test(message)) return "Too many attempts. Wait a minute, then try again.";
+  if (/fetch|network/i.test(message)) return "Could not reach the sign-in service. Check your connection, then try again.";
+  return message;
 }
 
 export default function LoginPage() {
@@ -36,8 +32,11 @@ export default function LoginPage() {
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Errors>({});
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const canSubmit = email.trim().length > 0 && password.length >= MIN_PASSWORD && !busy;
+  /** Typing in a field clears its message; the next submit checks it again. */
+  const clear = (key: string) => setErrors((prev) => (key in prev ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)) : prev));
 
   /** Once a session cookie exists, send first-timers to onboarding and everyone else home. */
   const routeAfterSignIn = async () => {
@@ -60,7 +59,7 @@ export default function LoginPage() {
       password,
     });
     if (err) {
-      setError(err.message);
+      setError(signInMessage(err.message));
       return false;
     }
     return true;
@@ -68,7 +67,19 @@ export default function LoginPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (busy) return;
+    // Sign-in only needs a password to be present; the length rule is for new accounts.
+    const found = collect({
+      email: checkEmail(email),
+      password: checkPassword(password, mode === "signup" ? MIN_PASSWORD : 1),
+      displayName: mode === "signup" && displayName.trim().length > 120 ? "Keep the name under 120 characters." : null,
+    });
+    setErrors(found);
+    if (Object.keys(found).length) {
+      setError(null);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -77,9 +88,10 @@ export default function LoginPage() {
           await signup(email.trim().toLowerCase(), password, displayName.trim() || undefined);
         } catch (err) {
           if (err instanceof ApiError && err.status === 409) {
-            setError("That account already exists. Switch to sign in.");
+            setErrors({ email: "An account with this email already exists. Sign in instead." });
+            focusFirstInvalid(formRef.current);
           } else {
-            setError(apiMessage(err));
+            setError(describeError(err));
           }
           return;
         }
@@ -93,6 +105,7 @@ export default function LoginPage() {
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
+    setErrors({});
   };
 
   return (
@@ -108,39 +121,44 @@ export default function LoginPage() {
           </Link>
         </>
       ) : (
-        <form onSubmit={submit}>
+        <form ref={formRef} onSubmit={submit} noValidate>
           <h1>{mode === "signin" ? "Sign in" : "Create an account"}</h1>
           <p>{mode === "signin" ? "Your email and password." : "Pick a password. You are signed in right away, nothing to confirm."}</p>
 
-          <Field label="Email" hint="Have a university email? Use it. It doubles as proof for student rates.">
+          <Field label="Email" hint="Have a university email? Use it. It doubles as proof for student rates." error={errors.email}>
             <input
               type="email"
               required
               autoFocus
               autoComplete="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                clear("email");
+              }}
               placeholder="you@university.edu"
             />
           </Field>
-          <Field label="Password" hint={mode === "signup" ? `At least ${MIN_PASSWORD} characters.` : undefined}>
+          <Field label="Password" hint={mode === "signup" ? `At least ${MIN_PASSWORD} characters.` : undefined} error={errors.password}>
             <input
               type="password"
               required
-              minLength={MIN_PASSWORD}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                clear("password");
+              }}
               placeholder="••••••••"
             />
           </Field>
           {mode === "signup" ? (
-            <Field label="Name the agent calls on behalf of" hint="Optional, shown on your profile.">
+            <Field label="Name the agent calls on behalf of" hint="Optional, shown on your profile." error={errors.displayName}>
               <input type="text" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Maya Patel" />
             </Field>
           ) : null}
           <ErrorNote message={error} />
-          <button type="submit" className="btn btn-primary btn-block" disabled={!canSubmit}>
+          <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
             {busy ? (mode === "signin" ? "Signing in…" : "Creating your account…") : mode === "signin" ? "Sign in" : "Create account"}
           </button>
           <p className="auth-alt">

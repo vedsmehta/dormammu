@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
 
 import type { CallState, RunStatus } from "@/lib/types";
 
@@ -70,24 +70,45 @@ export function Button({
 /** His underline input, for inputs that sit outside a .field (roster rows, windows). */
 export const inputClass = "input";
 
-/** A labelled field: label above, underline input, optional hint below. */
+/**
+ * A labelled field: label above, underline input, optional hint below. With `error` set the input
+ * is marked invalid and the message replaces the hint, so the fix is read next to the field.
+ */
 export function Field({
   label,
   children,
   hint,
   tight,
+  error,
 }: {
   label: string;
   children: ReactNode;
   hint?: ReactNode;
   tight?: boolean;
+  error?: string | null;
 }) {
+  const id = useId();
+  const control =
+    error && isValidElement(children)
+      ? cloneElement(children as ReactElement<Record<string, unknown>>, { "aria-invalid": true, "aria-describedby": id })
+      : children;
+  const cls = ["field", tight ? "tight" : "", error ? "invalid" : ""].filter(Boolean).join(" ");
   return (
-    <label className={tight ? "field tight" : "field"}>
+    <label className={cls}>
       <span className="lbl">{label}</span>
-      {children}
-      {hint ? <span className="hint block">{hint}</span> : null}
+      {control}
+      {error ? <FieldError id={id} message={error} /> : hint ? <span className="hint block">{hint}</span> : null}
     </label>
+  );
+}
+
+/** The message under an invalid field. Announced when it appears. */
+export function FieldError({ message, id }: { message?: string | null; id?: string }) {
+  if (!message) return null;
+  return (
+    <span id={id} className="err" role="alert">
+      {message}
+    </span>
   );
 }
 
@@ -129,7 +150,11 @@ export function PanelTitle({ children, href, linkText, id }: { children: ReactNo
 
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;
-  return <p className="note bad">{message}</p>;
+  return (
+    <p className="note bad" role="alert">
+      {message}
+    </p>
+  );
 }
 
 export function Brand({ href = "/" }: { href?: string }) {

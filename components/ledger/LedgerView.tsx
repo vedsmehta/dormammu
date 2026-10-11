@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AppShell, PageTitle } from "@/components/shell";
 import { Button, ErrorNote, Field, Loading, Tag } from "@/components/ui";
 import { fireLedger, getLedger } from "@/lib/api";
-import { describeError, fmtDay, fmtUsd, shortId, toLocalDay } from "@/lib/format";
+import { describeError, fmtDay, fmtUsd, shortId, toLocalDay, tidy } from "@/lib/format";
 import type { LedgerKind, LedgerRow } from "@/lib/types";
 
 const KIND_TONE: Record<LedgerKind, "mint" | "warn" | "line"> = {
@@ -49,7 +49,7 @@ function Rail({ rows, due, past }: { rows: LedgerRow[]; due?: boolean; past?: bo
           <time className={due ? "due" : undefined}>
             {r.expires_on ? `${due ? "Due · " : ""}${fmtDay(r.expires_on)}` : r.effective_on ? `From ${fmtDay(r.effective_on)}` : "Undated"}
           </time>
-          <b>{r.label}</b>
+          <b>{tidy(r.label)}</b>
           <p>
             <Tag tone={KIND_TONE[r.kind] ?? "line"} first>
               {r.kind.replace("_", " ")}
