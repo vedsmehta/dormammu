@@ -126,10 +126,86 @@ export interface AggregateView {
   n_live: number;
 }
 
+/** A follow-up booking call placed for one of this run's options. */
+export interface BookingLink {
+  call_id: string;
+  run_id: string;
+  state: string | null;
+  slot_iso: string | null;
+  confirmed: boolean;
+}
+
 export interface AssembledRun extends Run {
   calls: Call[];
   aggregate: AggregateView | null;
   server_now: string;
+  /** Options from this run the user chose, each with its booking call. */
+  bookings?: BookingLink[];
+  /** Set when this run is itself a booking: the run the options came from. */
+  booking_of?: { run_id: string | null } | null;
+}
+
+// --- Research-first flow (docs/CONTRACT.md "Proposals"). Everything is optional: the engine's output is
+// --- read tolerantly, the way the server reads it.
+
+export interface ProposalCitation {
+  url?: string | null;
+  title?: string | null;
+}
+
+export interface ProposalPlan {
+  name?: string | null;
+  monthly_usd?: number | null;
+  one_time_usd?: number | null;
+  term?: string | null;
+}
+
+export interface ProposalDiscount {
+  label?: string | null;
+  amount?: string | null;
+  eligibility?: string | null;
+}
+
+export interface ProposalItem {
+  id: string;
+  category?: string | null;
+  track?: Track | null;
+  source?: "research" | "roster" | string | null;
+  recommended?: boolean;
+  phone_verified?: boolean;
+  skip_reason?: string | null;
+  why?: string | null;
+  vendor?: { name?: string | null; phone?: string | null; website?: string | null; address?: string | null; is_demo?: boolean } | null;
+  plan?: ProposalPlan | null;
+  plans?: ProposalPlan[] | null;
+  discounts?: ProposalDiscount[] | null;
+  strategy?: { label?: string | null; opening?: string | null; asks?: string[] | null; walk_away?: string | null; fallback?: string | null } | null;
+  citations?: ProposalCitation[] | null;
+}
+
+export interface ProposalBody {
+  request?: string;
+  summary?: string | null;
+  items: ProposalItem[];
+  categories?: { key: string; label?: string | null }[];
+  regulations?: { topic?: string | null; rule?: string | null; what_we_do?: string | null; note?: string | null; applies?: boolean; citations?: (string | ProposalCitation)[] }[];
+  errors?: string[];
+  web_search?: boolean;
+  search_count?: number | null;
+  seconds?: number | null;
+  model?: string | null;
+}
+
+export type ProposalStatus = "researching" | "proposed" | "approved" | "dispatched" | "rejected" | "failed";
+
+export interface Proposal {
+  id: string;
+  request: string;
+  status: ProposalStatus;
+  proposal: ProposalBody;
+  approved_item_ids: string[];
+  run_id: string | null;
+  created_at: string;
 }
 
 export interface Vendor {
@@ -191,7 +267,7 @@ export interface Prefs {
   household_size?: number | null;
   current_providers?: CurrentProvider[];
   insurance?: Insurance | null;
-  /** Free text, e.g. "stanford.edu email on file". */
+  /** Free text, e.g. "school.edu email on file". */
   student_proof?: string | null;
   [key: string]: unknown;
 }

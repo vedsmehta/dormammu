@@ -26,7 +26,7 @@ PROFILE = {
         "budget_ceiling_usd": 900,
         "current_providers": [{"category": "internet", "name": "Comcast", "monthly_usd": 89.99, "contract_end": None}],
         "insurance": {"dental": "Delta Dental", "health": None},
-        "student_proof": "stanford.edu email on file",
+        "student_proof": "school.edu email on file",
         "caller_name": "Alex",
     },
 }

@@ -16,9 +16,9 @@ import {
   fmtDayFromTs,
   fmtDuration,
   fmtDurationWords,
-  fmtUsd,
   greetingFor,
   parseTs,
+  tidy,
   toLocalDay,
 } from "@/lib/format";
 import { isTerminal, trackLabel, type AssembledRun, type Call, type LedgerRow, type Profile, type RunListItem } from "@/lib/types";
@@ -113,11 +113,7 @@ function LedgerLine({ row, due, index }: { row: LedgerRow; due: boolean; index: 
       <time className={due ? "due" : undefined}>
         {row.expires_on ? `${due ? "Due · " : ""}${fmtDay(row.expires_on)}` : row.effective_on ? `From ${fmtDay(row.effective_on)}` : "Undated"}
       </time>
-      <b>{row.label}</b>
-      <p>
-        {row.kind.replace("_", " ")}
-        {row.amount_usd !== null ? ` · ${fmtUsd(row.amount_usd)}` : ""}
-      </p>
+      <b>{tidy(row.label)}</b>
     </li>
   );
 }
@@ -186,14 +182,11 @@ export function Dashboard({ email }: { email: string | null }) {
 
   const allCalls: CallWithRun[] = (assembled ?? []).flatMap((r) => r.calls.map((c) => ({ ...c, request: r.request })));
   const liveCalls = allCalls.filter((c) => !isTerminal(c.state));
-  const doneCalls = allCalls.filter((c) => c.state === "done");
-  const failedCalls = allCalls.filter((c) => c.state === "failed");
   const talkSeconds = (assembled ?? []).reduce((sum, r) => sum + (r.aggregate?.talk_seconds ?? 0), 0);
   const recentCalls = allCalls
     .slice()
     .sort((a, b) => (parseTs(b.started_at) ?? 0) - (parseTs(a.started_at) ?? 0))
     .slice(0, 6);
-  const scope = assembled ? `across the ${assembled.length} most recent ${assembled.length === 1 ? "request" : "requests"}` : "";
 
   const sortedLedger = (ledger ?? []).slice().sort((a, b) => {
     const ak = a.expires_on ?? a.effective_on ?? "9999";
@@ -201,19 +194,16 @@ export function Dashboard({ email }: { email: string | null }) {
     return ak < bk ? -1 : ak > bk ? 1 : 0;
   });
   const due = today ? sortedLedger.filter((r) => r.expires_on && r.expires_on <= today) : [];
-  const upcoming = today ? sortedLedger.filter((r) => !(r.expires_on && r.expires_on <= today)).slice(0, 4) : [];
 
   const name = firstName(profile?.display_name, email);
   const loaded = runs !== null && assembled !== null;
   const sub = !loaded
     ? "Loading your runs…"
     : liveCalls.length > 0
-      ? `${liveCalls.length} ${liveCalls.length === 1 ? "call is" : "calls are"} running${due.length ? ` and ${due.length} ledger ${due.length === 1 ? "row needs" : "rows need"} your yes` : ""}.`
-      : due.length
-        ? `Nothing is running. ${due.length} ledger ${due.length === 1 ? "row needs" : "rows need"} your yes.`
-        : runs && runs.length === 0
+      ? `${liveCalls.length} ${liveCalls.length === 1 ? "call is" : "calls are"} running.`
+      : runs && runs.length === 0
           ? "Nothing yet. Tell Dormammu what you need handled."
-          : "Nothing is running right now.";
+          : "Tell Dormammu what you need handled.";
 
   const head = (
     <div className="dash-top">
@@ -236,7 +226,7 @@ export function Dashboard({ email }: { email: string | null }) {
             index={0}
             label="Running now"
             value={loaded ? String(liveCalls.length) : "…"}
-            note={liveCalls.length ? "calls at the same time" : "no live calls"}
+            note={liveCalls.length ? "calls at once" : "no live calls"}
             href={featured ? `/runs/${featured.id}` : "/calls"}
             hot={liveCalls.length > 0}
             live={liveCalls.length > 0}
@@ -245,15 +235,15 @@ export function Dashboard({ email }: { email: string | null }) {
             index={1}
             label="Needs you"
             value={ledger ? String(due.length) : "…"}
-            note={due.length ? "ledger rows due now" : "nothing due in the ledger"}
+            note={due.length ? "dates to review" : "nothing due"}
             href="/ledger"
           />
-          <StatTile index={2} label="Calls made" value={loaded ? String(allCalls.length) : "…"} note={scope || "loading"} href="/calls" />
+          <StatTile index={2} label="Calls made" value={loaded ? String(allCalls.length) : "…"} note="recently" href="/calls" />
           <StatTile
             index={3}
             label="On the phone for you"
             value={loaded ? fmtDurationWords(talkSeconds) : "…"}
-            note={loaded ? `${doneCalls.length} finished ${doneCalls.length === 1 ? "call" : "calls"}, ${scope}` : "loading"}
+            note="total talk time"
             href="/calls"
           />
         </div>
@@ -267,7 +257,7 @@ export function Dashboard({ email }: { email: string | null }) {
           ) : featured ? (
             <>
               <div className="runline">
-                <q>{featured.request}</q>
+                <q>{tidy(featured.request)}</q>
                 <span className="clock num">{fmtDuration(wallSeconds(featured))}</span>
               </div>
               <p>
@@ -283,7 +273,7 @@ export function Dashboard({ email }: { email: string | null }) {
               </div>
             </>
           ) : (
-            <p>No run is live. Start one above and it shows up here while the calls are out.</p>
+            <p>No calls are out right now.</p>
           )}
         </Panel>
 
@@ -305,26 +295,10 @@ export function Dashboard({ email }: { email: string | null }) {
                 </ol>
                 <div className="acts">
                   <Link href="/ledger" className="btn btn-primary btn-sm">
-                    Review and fire the due rows
+                    Review
                   </Link>
                 </div>
               </>
-            )}
-          </Panel>
-          <Panel index={6} labelledBy="p-next">
-            <PanelTitle id="p-next" href="/ledger" linkText="Ledger">
-              Coming up
-            </PanelTitle>
-            {ledger === null ? (
-              <Loading />
-            ) : upcoming.length === 0 ? (
-              <p>Nothing dated yet. A quote, a promo, or an appointment lands here.</p>
-            ) : (
-              <ol className="rail">
-                {upcoming.map((r, i) => (
-                  <LedgerLine key={r.id} row={r} due={false} index={i} />
-                ))}
-              </ol>
             )}
           </Panel>
         </div>
@@ -351,42 +325,6 @@ export function Dashboard({ email }: { email: string | null }) {
           )}
         </Panel>
 
-        <Panel index={8} labelledBy="p-out">
-          <PanelTitle id="p-out">How calls ended</PanelTitle>
-          {assembled === null ? (
-            <Loading />
-          ) : allCalls.length === 0 ? (
-            <p>No calls to count yet.</p>
-          ) : (
-            <>
-              <div
-                className="bar"
-                role="img"
-                aria-label={`Of ${allCalls.length} calls: ${doneCalls.length} got an answer, ${liveCalls.length} still going, ${failedCalls.length} failed`}
-              >
-                {doneCalls.length ? <i style={{ flex: doneCalls.length, background: "var(--deep)" }} /> : null}
-                {liveCalls.length ? <i style={{ flex: liveCalls.length, background: "var(--mint)" }} /> : null}
-                {failedCalls.length ? <i style={{ flex: failedCalls.length, background: "#f2b84b" }} /> : null}
-              </div>
-              <ul className="legend">
-                {[
-                  ["Got an answer", doneCalls.length, "var(--deep)"],
-                  ["Still going", liveCalls.length, "var(--mint)"],
-                  ["Failed", failedCalls.length, "#f2b84b"],
-                ].map(([label, n, color]) => (
-                  <li key={String(label)}>
-                    <span>
-                      <i style={{ background: String(color) }} />
-                      {label}
-                    </span>
-                    <b className="num">{n}</b>
-                  </li>
-                ))}
-              </ul>
-              <p className="dash-note">Counted {scope}.</p>
-            </>
-          )}
-        </Panel>
 
         <Panel className="span3" index={9} labelledBy="p-runs">
           <PanelTitle id="p-runs" href="/onboarding" linkText="Edit roster">

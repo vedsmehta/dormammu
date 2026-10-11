@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 
 import { getLedger } from "@/lib/api";
-import { describeError, fmtDay, fmtUsd } from "@/lib/format";
+import { describeError, fmtDay, fmtUsd, tidy } from "@/lib/format";
 import type { AssembledRun, LedgerRow } from "@/lib/types";
 
 /**
@@ -47,7 +47,7 @@ export function RunLedgerAside({ run, active }: { run: AssembledRun; active: boo
           {mine.map((r, i) => (
             <li key={r.id} className={i === 0 ? "next" : undefined} style={{ "--i": i } as CSSProperties}>
               <time>{r.expires_on ? `Until ${fmtDay(r.expires_on)}` : r.effective_on ? `From ${fmtDay(r.effective_on)}` : "Undated"}</time>
-              <b>{r.label}</b>
+              <b>{tidy(r.label)}</b>
               <p>
                 {r.kind.replace("_", " ")}
                 {r.amount_usd !== null ? ` · ${fmtUsd(r.amount_usd)}` : ""}

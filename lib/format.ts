@@ -147,6 +147,18 @@ export function initials(name: string | null | undefined, fallback?: string | nu
   return src[0].toUpperCase();
 }
 
+/**
+ * A stored label or request as it should read on screen: without the "[seeded]" marker and the
+ * bracketed bookkeeping ("(simulated)", "(30-day validity assumed)", "(11-month promo assumed)").
+ * The stored text is untouched; Evidence and Insights still report how much data is seeded.
+ */
+export function tidy(text: string | null | undefined): string {
+  return (text ?? "")
+    .replace(/\[seeded\]\s*/gi, "")
+    .replace(/\s*\((?:simulated|seeded|\d+-day validity assumed|\d+-month promo (?:assumed|stated on call))\)/gi, "")
+    .trim();
+}
+
 /** First name from a display name, else the local part of an email, else 'there'. */
 export function firstName(name: string | null | undefined, email?: string | null): string {
   const n = (name ?? "").trim();
@@ -156,12 +168,43 @@ export function firstName(name: string | null | undefined, email?: string | null
   return "there";
 }
 
-/** A readable message for any thrown value. An ApiError carries a status; 401 and 404 get a hint. */
+/**
+ * The "detail" of a FastAPI error body as one sentence. A 422 carries a list of field problems
+ * ({loc, msg}); those are joined as "field: problem". Null when the body is not that shape.
+ */
+function apiDetail(body: unknown): string | null {
+  if (typeof body !== "string" || !body) return null;
+  let detail: unknown;
+  try {
+    detail = (JSON.parse(body) as { detail?: unknown }).detail;
+  } catch {
+    return null;
+  }
+  if (typeof detail === "string") return detail;
+  if (!Array.isArray(detail)) return null;
+  const parts = detail.slice(0, 3).map((d: { loc?: unknown; msg?: unknown }) => {
+    const loc = Array.isArray(d.loc) ? d.loc.filter((p) => p !== "body" && typeof p === "string") : [];
+    const msg = typeof d.msg === "string" ? d.msg.replace(/^Value error, /, "") : "is not valid";
+    return loc.length ? `${loc.join(" ").replace(/_/g, " ")}: ${msg}` : msg;
+  });
+  if (parts.length === 0) return null;
+  const more = detail.length - parts.length;
+  return parts.join("; ") + (more > 0 ? `; and ${more} more` : "");
+}
+
+/**
+ * A readable message for any thrown value. An ApiError carries a status and the response body:
+ * 401 and 404 get a hint, and anything else shows the service's own explanation, never raw JSON.
+ */
 export function describeError(e: unknown): string {
   if (e instanceof Error) {
-    const status = (e as { status?: unknown }).status;
+    const { status, body } = e as { status?: unknown; body?: unknown };
     if (status === 401) return "Not authorized by the API (401). Sign in again or set DEV_USER_ID on the Python side.";
+    const detail = apiDetail(body);
+    if (detail) return detail.charAt(0).toUpperCase() + detail.slice(1);
     if (status === 404) return "Not found (404).";
+    if (typeof status === "number" && status >= 500) return `The service hit an error (${status}). Try again in a moment.`;
+    if (e instanceof TypeError && /fetch|network/i.test(e.message)) return "Could not reach the service. Check that it is running, then try again.";
     return e.message;
   }
   return String(e);

@@ -38,6 +38,7 @@ from server.auth import bearer_token, current_user_id, ensure_profile
 from server.schemas import (
     JsonRpcRequest,
     LedgerFire,
+    OptionChoose,
     ProfileUpdate,
     ProposalApprove,
     ResearchIn,
@@ -127,7 +128,47 @@ def _assemble(store: Store, run_id: str, user_id: str | None, now: datetime) -> 
         raise HTTPException(status_code=404, detail="run not found")
     run["aggregate"] = _safe_aggregate(run)
     run["server_now"] = now.isoformat()
+    if user_id:
+        try:
+            run["bookings"], run["booking_of"] = _booking_links(store, user_id, run_id)
+        except Exception:  # noqa: BLE001  (the links are a convenience; a run must still assemble)
+            run["bookings"], run["booking_of"] = [], None
     return run
+
+
+BOOKING_EVENT_SCAN = 300
+
+
+def _booking_links(store: Store, user_id: str, run_id: str) -> tuple[list[dict], dict | None]:
+    """Follow-up booking calls for this run, and the choice this run came from when it is one itself.
+
+    A booking is recorded as a run_requested event with kind "booking" on the new run, naming the run and
+    call the user chose from. `bookings` is [{call_id, run_id, state, slot_iso, confirmed}], one per chosen
+    call (newest wins); `booking_of` is {run_id} or None.
+    """
+    bookings: dict[str, dict] = {}
+    booking_of: dict | None = None
+    for event in store.list_events(user_id, BOOKING_EVENT_SCAN):
+        data = event.get("data") or {}
+        if event.get("type") != "run_requested" or not isinstance(data, dict) or data.get("kind") != "booking":
+            continue
+        if event.get("run_id") == run_id:
+            booking_of = {"run_id": data.get("source_run_id")}
+        if data.get("source_run_id") != run_id or not data.get("source_call_id"):
+            continue
+        if data["source_call_id"] in bookings:
+            continue
+        link = {"call_id": data["source_call_id"], "run_id": event.get("run_id"), "state": None, "slot_iso": None, "confirmed": False}
+        follow = store.get_run(event.get("run_id")) if event.get("run_id") else None
+        for call in (follow or {}).get("calls") or []:
+            if data.get("booking_call_id") and call.get("id") != data["booking_call_id"]:
+                continue
+            link["state"] = call.get("state")
+            outcome = call.get("outcome") if isinstance(call.get("outcome"), dict) else {}
+            link["slot_iso"] = outcome.get("slot_iso")
+            link["confirmed"] = bool(outcome.get("confirmed"))
+        bookings[data["source_call_id"]] = link
+    return list(bookings.values()), booking_of
 
 
 app = FastAPI(title="Dormammu", docs_url=f"{PREFIX}/docs", openapi_url=f"{PREFIX}/openapi.json")
@@ -262,6 +303,30 @@ def _safe_prior_context(store: Store, user_id: str, vendor_key: str, track: str)
         return None
 
 
+def _log_context_applied(store: Store, user_id: str, run_id: str, calls: list[dict], source: str | None = None) -> None:
+    """One context_applied event per run naming the calls that open with what earlier calls learned.
+    This is the self-improvement loop made countable. `source` overrides the per-vendor lookup."""
+    applied = []
+    for row in calls:
+        if not row.get("prior_context"):
+            continue
+        origin = source
+        if origin is None:
+            try:
+                origin = planner.prior_context_detail(store, user_id, row["vendor_key"], row["track"])["source"]
+            except Exception:  # noqa: BLE001
+                origin = "unknown"
+        applied.append({"vendor_key": row.get("vendor_key"), "track": row.get("track"), "source": origin})
+    if applied:
+        log_event(
+            store,
+            user_id,
+            "context_applied",
+            {"n_calls": len(calls), "n_with_context": len(applied), "calls": applied},
+            run_id=run_id,
+        )
+
+
 async def _dispatch(store: Store, user_id: str, run: dict, calls: list[dict]) -> None:
     """Await the fan-out. dispatch_run never raises by contract; guard anyway so the run still returns."""
     profile = store.get_profile(user_id)
@@ -336,6 +401,7 @@ async def post_run(body: RunCreate, user_id: UserId, store: StoreDep) -> dict:
         {"request": request_text, "n_calls": len(calls), "vendor_keys": [r["vendor_key"] for r in calls]},
         run_id=run["id"],
     )
+    _log_context_applied(store, user_id, run["id"], calls)
     await _dispatch(store, user_id, run, calls)
     return _assemble(store, run["id"], user_id, utcnow())
 
@@ -502,6 +568,141 @@ async def tick_run(run_id: str, user_id: UserId, store: StoreDep) -> dict:
     now = utcnow()
     await _tick(store, user_id, run, now)
     return _assemble(store, run_id, user_id, now)
+
+
+def _offer_phrase(call: dict) -> str:
+    """The chosen call's result as the vendor would recognise it: 'quoted $1,240 flat', 'offered Thu Oct 15'."""
+    outcome = call.get("outcome") if isinstance(call.get("outcome"), dict) else {}
+    track = outcome.get("track") or call.get("track")
+    if track == "quote" and outcome.get("amount_usd") is not None:
+        unit = f" {outcome['unit']}" if outcome.get("unit") else ""
+        return f"quoted {_money(outcome['amount_usd'])}{unit}"
+    if track == "schedule" and outcome.get("slot_iso"):
+        return f"offered an appointment on {str(outcome['slot_iso'])[:16].replace('T', ' at ')}"
+    if track == "negotiate" and outcome.get("saved_usd") is not None:
+        return f"offered {_money(outcome['saved_usd'])} a month off"
+    return "gave us an offer"
+
+
+def _hold_simulated(store: Store, user_id: str, run_id: str, row: dict) -> None:
+    """An external vendor while ALLOW_EXTERNAL_CALLS is unset: run the row on the labeled simulated timeline."""
+    store.update_call(row["id"], {"simulated": True, "error": NOT_DIALED_NOTE, "started_at": utcnow().isoformat()})
+    store.update_call_state(row["id"], "dialing", 1)
+    context = {"track": row["track"], "vendor_key": row["vendor_key"]}
+    log_event(
+        store,
+        user_id,
+        "call_simulated",
+        {"reason": NOT_DIALED_NOTE, "limit": False, "external": True, **context},
+        run_id=run_id,
+        call_id=row["id"],
+    )
+    log_event(
+        store,
+        user_id,
+        "call_dispatched",
+        {"simulated": True, "dial_call_id": None, **context},
+        run_id=run_id,
+        call_id=row["id"],
+    )
+
+
+@app.post(f"{PREFIX}/runs/{{run_id}}/choose")
+async def choose_option(run_id: str, body: OptionChoose, user_id: UserId, store: StoreDep) -> dict:
+    """The user picked options a run brought back ("which ones do you want to go with?"). Place one more
+    call to each chosen vendor to confirm the offer and either book the appointment or set the plan up.
+    The bookings are one normal run on the schedule track, so each confirmed slot lands in the ledger and
+    on the calendar like any other appointment.
+
+    Returns {"run": the new assembled run, "source_run_id", "skipped": [{call_id, reason}]}. A call is
+    skipped when it has no result, was already booked, or its vendor is gone; 400 when nothing is left.
+    """
+    run = store.get_run(run_id, user_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    by_id = {c.get("id"): c for c in run.get("calls") or []}
+    already = {link["call_id"] for link in _booking_links(store, user_id, run_id)[0]}
+    vendors = {v.get("id"): v for v in store.list_vendors(user_id)}
+    chosen: list[tuple[dict, dict]] = []
+    skipped: list[dict] = []
+    seen: set[str] = set()
+    for call_id in body.call_ids:
+        if call_id in seen:
+            continue
+        seen.add(call_id)
+        call = by_id.get(call_id)
+        vendor = vendors.get(call.get("vendor_id")) if call else None
+        if call is None:
+            skipped.append({"call_id": call_id, "reason": "not part of this run"})
+        elif call.get("state") != "done" or not isinstance(call.get("outcome"), dict):
+            skipped.append({"call_id": call_id, "reason": "no result to confirm yet"})
+        elif call_id in already:
+            skipped.append({"call_id": call_id, "reason": "a booking call was already placed"})
+        elif vendor is None or not vendor.get("phone"):
+            skipped.append({"call_id": call_id, "reason": "vendor is no longer on your roster"})
+        else:
+            chosen.append((call, vendor))
+    if not chosen:
+        reasons = "; ".join(sorted({s["reason"] for s in skipped})) or "nothing was chosen"
+        raise HTTPException(status_code=400, detail=f"no booking call could be placed: {reasons}")
+
+    names = ", ".join(vendor["name"] for _call, vendor in chosen)
+    booking = store.create_run(user_id, f"Booking: {names}")
+    rows = []
+    for call, vendor in chosen:
+        offer = _offer_phrase(call)
+        day = str(call.get("ended_at") or call.get("created_at") or utcnow().isoformat())[:10]
+        rows.append(
+            {
+                "run_id": booking["id"],
+                "vendor_id": vendor["id"],
+                "vendor_key": vendor["key"],
+                "track": "schedule",
+                "target_name": vendor["name"],
+                "target_phone": vendor["phone"],
+                "objective": (
+                    f"The client has chosen your offer: you {offer}. Confirm it still stands at those terms. "
+                    "If it needs an appointment, book it inside the client's availability. If it can be set "
+                    "up over the phone, set it up and agree a start date. Read the date and time back. Do not "
+                    "agree to anything that costs more than what was offered."
+                ),
+                "prior_context": f"On {day} you {offer}. The client reviewed the options and picked yours.",
+                "state": "planned",
+                "state_rank": 0,
+                "simulated": False,
+            }
+        )
+    calls = store.insert_calls(rows)
+    genders = ("female", "male")
+    for index, row in enumerate(calls):
+        row["voice_gender"] = genders[index % 2]
+        # One event per chosen option, so a run can show which of its calls were booked and where.
+        log_event(
+            store,
+            user_id,
+            "run_requested",
+            {
+                "request": booking["request"],
+                "kind": "booking",
+                "source_run_id": run_id,
+                "source_call_id": chosen[index][0]["id"],
+                "booking_call_id": row["id"],
+                "n_calls": len(calls),
+                "vendor_keys": [row["vendor_key"]],
+            },
+            run_id=booking["id"],
+        )
+    _log_context_applied(store, user_id, booking["id"], calls, source="chosen_option")
+    enabled = external_calls_enabled()
+    to_dial = [row for row, (_call, vendor) in zip(calls, chosen) if enabled or vendor.get("is_demo")]
+    held = [row for row in calls if row not in to_dial]
+    for row in held:
+        _hold_simulated(store, user_id, booking["id"], row)
+    if to_dial:
+        await _dispatch(store, user_id, booking, to_dial)
+    else:
+        store.set_run_status(booking["id"], "running")
+    return {"run": _assemble(store, booking["id"], user_id, utcnow()), "source_run_id": run_id, "skipped": skipped}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -726,6 +927,7 @@ async def get_evidence(user_id: UserId, store: StoreDep) -> dict:
             "n_undialed_calls": buckets.get("undialed", 0),
         },
         "keewano": _keewano_evidence(),
+        "loop": _loop_evidence(store, user_id),
         "events": {"by_type": store.count_events_by_type(user_id), "recent": _recent_events(store, user_id)},
         "calls": {"by_state": store.count_calls_by_state(user_id), "by_simulated": buckets},
         "policy": _policy_evidence(),
@@ -737,6 +939,50 @@ async def get_evidence(user_id: UserId, store: StoreDep) -> dict:
         },
         "generated_at": utcnow().isoformat(),
     }
+
+
+LOOP_CALL_SCAN = 400
+LOOP_EXAMPLES = 6
+
+
+def _loop_evidence(store: Store, user_id: str) -> dict:
+    """The self-improvement loop as counts and examples: how many calls opened with what earlier calls
+    learned, the sentences themselves, and whether repeat calls did better. Never raises."""
+    out: dict[str, Any] = {
+        "n_calls": 0,
+        "n_with_prior_context": 0,
+        "n_context_applied_events": 0,
+        "examples": [],
+        "context_effect": None,
+        "n_recommendations": None,
+        "error": None,
+    }
+    try:
+        calls = store.list_calls_for_user(user_id, LOOP_CALL_SCAN, 0)
+        with_context = [c for c in calls if _str(c.get("prior_context"))]
+        out["n_calls"] = len(calls)
+        out["n_with_prior_context"] = len(with_context)
+        out["n_context_applied_events"] = int(store.count_events_by_type(user_id).get("context_applied", 0))
+        out["examples"] = [
+            {
+                "call_id": c.get("id"),
+                "run_id": c.get("run_id"),
+                "target_name": c.get("target_name"),
+                "track": c.get("track"),
+                "prior_context": _str(c.get("prior_context"))[:400],
+                "created_at": c.get("created_at"),
+                "simulated": bool(c.get("simulated")),
+            }
+            for c in with_context[:LOOP_EXAMPLES]
+        ]
+        from analysis.insights import compute_insights
+
+        report = compute_insights(store, user_id, cache_ttl=60)
+        out["context_effect"] = report.get("context_effect")
+        out["n_recommendations"] = len(report.get("recommendations") or [])
+    except Exception as exc:  # noqa: BLE001
+        out["error"] = str(exc)[:200]
+    return out
 
 
 def _read_eval_report() -> Any | None:
@@ -1192,6 +1438,8 @@ async def approve_proposal(
         },
         run_id=run["id"],
     )
+
+    _log_context_applied(store, user_id, run["id"], calls)
 
     now_iso = utcnow().isoformat()
     for row in held:

@@ -1,7 +1,7 @@
 // Turn calls, ledger rows and availability windows into dated calendar events. Pure; no clock.
 
 import type { CallWithRequest } from "@/lib/api";
-import { parseTs } from "@/lib/format";
+import { parseTs, tidy } from "@/lib/format";
 import type { Availability, LedgerRow } from "@/lib/types";
 
 import { addDays, dayKeyOf, keyToUtc, timeOf } from "./dates";
@@ -92,7 +92,7 @@ export function ledgerEvents(rows: LedgerRow[]): CalEvent[] {
       id: `ledger:${r.id}`,
       day: key,
       kind,
-      title: r.label,
+      title: tidy(r.label),
       detail: [r.kind.replace("_", " "), amount].filter(Boolean).join(" · ") || null,
       time: null,
       href: ledgerHref(r),

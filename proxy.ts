@@ -14,6 +14,7 @@ const PROTECTED = [
   "/insights",
   "/evidence",
   "/research",
+  "/proposals",
   "/calendar",
 ];
 
