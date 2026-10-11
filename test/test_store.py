@@ -1,0 +1,279 @@
+"""Store semantics that both backends must share: monotonic refusal, exactly-once claim, run assembly,
+prior outcomes per vendor, due ledger rows.
+
+The Supabase case runs only when SUPABASE_URL is set and RUN_SUPABASE_TESTS=1. It creates a throwaway
+auth user with the admin API (profiles.id references auth.users) and deletes it afterwards, which
+cascades to every row the test wrote.
+"""
+
+from __future__ import annotations
+
+import os
+import uuid
+from datetime import date, timedelta
+
+import pytest
+
+from server.store import SqliteStore, SupabaseStore
+
+BACKENDS = ["sqlite", "supabase"]
+
+
+def _supabase_enabled() -> bool:
+    return bool(os.environ.get("SUPABASE_URL")) and os.environ.get("RUN_SUPABASE_TESTS") == "1"
+
+
+@pytest.fixture(params=BACKENDS)
+def backend(request, tmp_path):
+    """Yields (store, user_id) with a profile row already present."""
+    if request.param == "sqlite":
+        store = SqliteStore(tmp_path / "store.db")
+        user_id = str(uuid.uuid4())
+        store.upsert_profile(user_id, {"display_name": "test"})
+        yield store, user_id
+        return
+
+    if not _supabase_enabled():
+        pytest.skip("set SUPABASE_URL and RUN_SUPABASE_TESTS=1 to run the Supabase store tests")
+    store = SupabaseStore()
+    email = f"dormammu-test-{uuid.uuid4().hex[:12]}@example.com"
+    created = store.client.auth.admin.create_user(
+        {"email": email, "email_confirm": True, "password": uuid.uuid4().hex}
+    )
+    user_id = created.user.id
+    store.upsert_profile(user_id, {"display_name": "test"})
+    try:
+        yield store, user_id
+    finally:
+        store.client.auth.admin.delete_user(user_id)
+
+
+def _vendors(store, user_id):
+    return store.upsert_vendors(
+        user_id,
+        [
+            {
+                "key": "movers_a",
+                "name": "Pack & Go",
+                "track": "quote",
+                "phone": "+15550000001",
+                "is_demo": True,
+            },
+            {
+                "key": "isp_a",
+                "name": "Fiber Co",
+                "track": "negotiate",
+                "phone": "+15550000002",
+                "is_demo": True,
+            },
+        ],
+    )
+
+
+def _call_row(run_id, vendor, **extra):
+    row = {
+        "run_id": run_id,
+        "vendor_id": vendor["id"],
+        "vendor_key": vendor["key"],
+        "track": vendor["track"],
+        "target_name": vendor["name"],
+        "target_phone": vendor["phone"],
+        "objective": "get a quote",
+        "prior_context": None,
+        "simulated": False,
+    }
+    row.update(extra)
+    return row
+
+
+def test_profile_round_trip(backend):
+    store, user_id = backend
+    row = store.upsert_profile(user_id, {"prefs": {"budget_ceiling_usd": 900}, "cohort": "student"})
+    assert row["id"] == user_id
+    assert row["prefs"] == {"budget_ceiling_usd": 900}
+    assert row["cohort"] == "student"
+    again = store.get_profile(user_id)
+    assert again is not None and again["prefs"]["budget_ceiling_usd"] == 900
+
+
+def test_vendors_upsert_by_owner_and_key(backend):
+    store, user_id = backend
+    first = _vendors(store, user_id)
+    assert {v["key"] for v in first} == {"movers_a", "isp_a"}
+    assert all(v["owner_id"] == user_id for v in first)
+    assert first[0]["is_demo"] is True
+    store.upsert_vendors(
+        user_id, [{"key": "movers_a", "name": "Pack & Go Movers", "track": "quote", "phone": "+15550000009"}]
+    )
+    listed = store.list_vendors(user_id)
+    assert len(listed) == 2
+    movers = next(v for v in listed if v["key"] == "movers_a")
+    assert movers["name"] == "Pack & Go Movers"
+    assert movers["phone"] == "+15550000009"
+    assert movers["id"] == first[0]["id"] if first[0]["key"] == "movers_a" else True
+
+
+def test_update_call_state_is_monotonic(backend):
+    store, user_id = backend
+    vendor = _vendors(store, user_id)[0]
+    run = store.create_run(user_id, "move me")
+    (call,) = store.insert_calls([_call_row(run["id"], vendor)])
+    assert call["state"] == "planned" and call["state_rank"] == 0 and call["simulated"] is False
+
+    assert store.update_call_state(call["id"], "dialing", 1) is True
+    assert store.update_call_state(call["id"], "talking", 3) is True
+    assert store.update_call_state(call["id"], "ringing", 2) is False
+    assert store.update_call_state(call["id"], "talking", 3) is False
+    row = store.get_call(call["id"])
+    assert row["state"] == "talking" and row["state_rank"] == 3
+
+    assert store.update_call_state(call["id"], "done", 6, {"ended_at": "2026-10-11T20:00:00+00:00"}) is True
+    assert store.update_call_state(call["id"], "failed", 6) is False
+    row = store.get_call(call["id"])
+    assert row["state"] == "done" and row["ended_at"].startswith("2026-10-11T20:00:00")
+
+
+def test_claim_extraction_exactly_once(backend):
+    store, user_id = backend
+    vendor = _vendors(store, user_id)[0]
+    run = store.create_run(user_id, "move me")
+    (call,) = store.insert_calls([_call_row(run["id"], vendor)])
+    store.update_call_state(call["id"], "extracting", 4)
+
+    assert store.claim_extraction(call["id"]) is True
+    assert store.claim_extraction(call["id"]) is False
+    row = store.get_call(call["id"])
+    assert row["state"] == "extracting"
+    assert store.update_call_state(call["id"], "extracting", 4) is False
+    assert store.update_call_state(call["id"], "done", 6) is True
+
+    store.update_call(
+        call["id"],
+        {"outcome": {"track": "quote", "amount_usd": 1.0, "unit": None, "caveats": [], "note": None}},
+    )
+    assert store.claim_extraction(call["id"]) is False
+    assert store.get_call(call["id"])["outcome"]["amount_usd"] == 1.0
+
+
+def test_get_run_assembles_calls_in_order(backend):
+    store, user_id = backend
+    vendors = _vendors(store, user_id)
+    run = store.create_run(user_id, "move me")
+    assert run["status"] == "dispatching"
+    rows = store.insert_calls([_call_row(run["id"], vendors[0]), _call_row(run["id"], vendors[1])])
+    assert len(rows) == 2
+
+    full = store.get_run(run["id"], user_id)
+    assert full is not None
+    assert full["request"] == "move me"
+    assert [c["id"] for c in full["calls"]] == [r["id"] for r in rows]
+    assert [c["started_at"] for c in full["calls"]] == sorted(c["started_at"] for c in full["calls"])
+    assert store.get_run(run["id"], str(uuid.uuid4())) is None
+    assert store.get_run(str(uuid.uuid4())) is None
+
+    store.set_run_status(run["id"], "complete", completed_at="2026-10-11T20:00:00+00:00")
+    again = store.get_run(run["id"])
+    assert again["status"] == "complete" and again["completed_at"]
+    assert [r["id"] for r in store.list_runs(user_id)] == [run["id"]]
+
+    store.update_call_state(rows[0]["id"], "done", 6)
+    assert [c["id"] for c in store.list_calls(run["id"], nonterminal_only=True)] == [rows[1]["id"]]
+
+
+def test_last_outcomes_for_vendor(backend):
+    store, user_id = backend
+    vendors = _vendors(store, user_id)
+    movers, isp = vendors[0], vendors[1]
+    if movers["key"] != "movers_a":
+        movers, isp = isp, movers
+    other_user = str(uuid.uuid4())
+
+    run_old = store.create_run(user_id, "first")
+    (old,) = store.insert_calls([_call_row(run_old["id"], movers, started_at="2026-01-01T00:00:00+00:00")])
+    store.update_call(old["id"], {"outcome": {"track": "quote", "amount_usd": 100.0}})
+    run_new = store.create_run(user_id, "second")
+    (new,) = store.insert_calls([_call_row(run_new["id"], movers, started_at="2026-06-01T00:00:00+00:00")])
+    store.update_call(new["id"], {"outcome": {"track": "quote", "amount_usd": 90.0}})
+    (pending,) = store.insert_calls(
+        [_call_row(run_new["id"], movers, started_at="2026-07-01T00:00:00+00:00")]
+    )
+    (isp_call,) = store.insert_calls([_call_row(run_new["id"], isp)])
+    store.update_call(isp_call["id"], {"outcome": {"track": "negotiate", "action": "reduced"}})
+
+    rows = store.last_outcomes_for_vendor(user_id, "movers_a")
+    assert [r["id"] for r in rows] == [new["id"], old["id"]]
+    assert rows[0]["outcome"]["amount_usd"] == 90.0
+    assert pending["id"] not in {r["id"] for r in rows}
+    assert store.last_outcomes_for_vendor(user_id, "movers_a", limit=1)[0]["id"] == new["id"]
+    assert store.last_outcomes_for_vendor(other_user, "movers_a") == []
+    assert store.last_outcomes_for_vendor(user_id, "nobody") == []
+
+
+def test_events_and_plan_cache(backend):
+    store, user_id = backend
+    run = store.create_run(user_id, "move me")
+    first = store.insert_event(user_id, "run_requested", {"request": "move me"}, run_id=run["id"])
+    second = store.insert_event(user_id, "run_aggregated", {"n_calls": 0}, run_id=run["id"])
+    assert first["type"] == "run_requested" and first["data"] == {"request": "move me"}
+    listed = store.list_events(user_id, limit=10)
+    assert [e["id"] for e in listed][:2] == [second["id"], first["id"]]
+
+    request_hash = f"test-{uuid.uuid4().hex}"
+    assert store.get_plan_cache(request_hash) is None
+    plans = [{"vendor_key": "movers_a", "track": "quote", "objective": "quote", "voice_gender": "female"}]
+    try:
+        store.put_plan_cache(request_hash, plans)
+        store.put_plan_cache(request_hash, plans)
+        assert store.get_plan_cache(request_hash) == plans
+    finally:
+        # plan_cache has no user_id, so deleting the auth user does not clean it up.
+        if isinstance(store, SupabaseStore):
+            store.client.table("plan_cache").delete().eq("request_hash", request_hash).execute()
+
+
+def test_due_ledger(backend):
+    store, user_id = backend
+    vendor = _vendors(store, user_id)[0]
+    run = store.create_run(user_id, "move me")
+    (call,) = store.insert_calls([_call_row(run["id"], vendor)])
+    today = date(2026, 10, 11)
+    inserted = store.insert_ledger(
+        [
+            {
+                "user_id": user_id,
+                "vendor_id": vendor["id"],
+                "kind": "promo_expiry",
+                "label": "Fiber Co promo",
+                "amount_usd": 89.0,
+                "effective_on": (today - timedelta(days=365)).isoformat(),
+                "expires_on": (today - timedelta(days=1)).isoformat(),
+                "source_call": call["id"],
+            },
+            {
+                "user_id": user_id,
+                "vendor_id": vendor["id"],
+                "kind": "renewal",
+                "label": "Movers deposit",
+                "amount_usd": None,
+                "expires_on": (today + timedelta(days=30)).isoformat(),
+                "source_call": call["id"],
+            },
+            {"user_id": user_id, "kind": "quote", "label": "undated", "amount_usd": 12.5},
+        ]
+    )
+    assert len(inserted) == 3
+    assert inserted[0]["kind"] == "promo_expiry" and inserted[0]["source_call"] == call["id"]
+    assert float(inserted[0]["amount_usd"]) == 89.0
+
+    due = store.due_ledger(user_id, today.isoformat())
+    assert [r["label"] for r in due] == ["Fiber Co promo"]
+    assert str(due[0]["expires_on"])[:10] == (today - timedelta(days=1)).isoformat()
+    assert [r["label"] for r in store.due_ledger(user_id, f"{today.isoformat()}T12:00:00+00:00")] == [
+        "Fiber Co promo"
+    ]
+    later = store.due_ledger(user_id, (today + timedelta(days=60)).isoformat())
+    assert [r["label"] for r in later] == ["Fiber Co promo", "Movers deposit"]
+    assert store.due_ledger(str(uuid.uuid4()), today.isoformat()) == []
+
+    listed = store.list_ledger(user_id)
+    assert [r["label"] for r in listed] == ["Fiber Co promo", "Movers deposit", "undated"]
