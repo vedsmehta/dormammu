@@ -16,6 +16,7 @@ import os
 import random
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from call.state import STATE_RANK
 from events.log import log_event
@@ -57,7 +58,12 @@ def _next_week_slot(rng: random.Random, today: date) -> datetime:
     day = monday + timedelta(days=rng.randint(0, 4))
     hour = rng.choice([9, 10, 11, 13, 14, 15, 16])
     minute = rng.choice([0, 30])
-    tz = datetime.now().astimezone().tzinfo
+    # The product's one timezone, not the machine's: on Vercel the machine is UTC, and a slot built there
+    # would read 7 hours off against the spoken transcript.
+    try:
+        tz = ZoneInfo(os.environ.get("DORMAMMU_TZ") or "America/Los_Angeles")
+    except Exception:  # noqa: BLE001
+        tz = datetime.now().astimezone().tzinfo
     return datetime(day.year, day.month, day.day, hour, minute, tzinfo=tz)
 
 
