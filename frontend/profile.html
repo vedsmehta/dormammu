@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app">
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep app-head">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:70px; width:680px; height:200px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:240px; width:760px; height:220px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="dashboard.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="dashboard.html">Dashboard</a>
+          <a href="calls.html">Calls</a>
+          <a href="ledger.html">Ledger</a>
+          <a href="profile.html" aria-current="page">Profile</a>
+        </div>
+        <div class="nav-end"><a class="avatar" href="profile.html" aria-label="Maya Patel, profile">M</a></div>
+      </nav>
+      <div class="who-head">
+        <span class="face rise" aria-hidden="true">MP</span>
+        <div>
+          <h1 class="rise" style="--d:.1s">Maya Patel</h1>
+          <p class="rise" style="--d:.2s">Full-time student · State University · member since Aug 2026</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet to-end grab sheet-up" style="--d:.3s">
+    <div class="wrap">
+      <section class="psec">
+        <div><h2>About you</h2><p>Who the agent says it is calling for.</p></div>
+        <dl class="facts">
+          <div><dt>Name</dt><dd>Maya Patel <a class="edit" href="#">Edit</a></dd></div>
+          <div><dt>Email</dt><dd>maya.patel@stateu.edu <span class="verified">Verified</span></dd></div>
+          <div><dt>Mobile</dt><dd>+1 (415) •••-••07 <a class="edit" href="#">Edit</a></dd></div>
+          <div><dt>School</dt><dd>State University <a class="edit" href="#">Edit</a></dd></div>
+          <div><dt>Moving to</dt><dd>Apartment near campus, Nov 1 <a class="edit" href="#">Edit</a></dd></div>
+        </dl>
+      </section>
+
+      <section class="psec">
+        <div><h2>Eligibility</h2><p>The agent only claims what is true about you. This is exactly what it is told to ask for.</p></div>
+        <div>
+          <dl class="facts">
+            <div><dt>Profile</dt><dd>Full-time student <a class="edit" href="#">Change</a></dd></div>
+            <div><dt>Proof on file</dt><dd>University email <span class="verified">Verified Oct 11</span></dd></div>
+            <div><dt>Check again</dt><dd>Each term. Next: January 2027</dd></div>
+          </dl>
+          <p class="rules-h">Asked for on every call</p>
+          <ul class="asks"><li>student rate</li><li>waived activation fee</li><li>no-contract term</li></ul>
+        </div>
+      </section>
+
+      <section class="psec">
+        <div><h2>Availability</h2><p>Used when booking appointments by phone.</p></div>
+        <div>
+          <div class="pills"><label class="pill"><input type="checkbox" disabled><span>Mon</span></label><label class="pill"><input type="checkbox" disabled checked><span>Tue</span></label><label class="pill"><input type="checkbox" disabled><span>Wed</span></label><label class="pill"><input type="checkbox" disabled checked><span>Thu</span></label><label class="pill"><input type="checkbox" disabled><span>Fri</span></label></div>
+          <dl class="facts" style="margin-top:18px">
+            <div><dt>Earliest time</dt><dd>After 1 PM <a class="edit" href="#">Edit</a></dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="psec">
+        <div><h2>What the agent may do</h2><p>The limits it works within on a call.</p></div>
+        <div>
+          <p class="rules-h">Without asking you</p>
+          <ul class="rules">
+            <li>Get quotes and compare them</li>
+            <li>Accept a discount, a credit or a removed fee</li>
+            <li>Book an appointment inside your availability</li>
+          </ul>
+          <p class="rules-h">Only after you say yes</p>
+          <ul class="rules confirm">
+            <li>Cancel a service</li>
+            <li>Extend or sign a contract, or change your plan</li>
+            <li>Accept an offer that comes with conditions</li>
+          </ul>
+          <p class="rules-h">Never</p>
+          <ul class="rules never">
+            <li>Read out a full card number, SSN or password</li>
+            <li>Invent a competing offer, a hardship or a problem with the service</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="psec">
+        <div><h2>Speaking for you</h2><p>Vendors where you have added Dormammu as an authorized contact.</p></div>
+        <dl class="facts">
+          <div><dt>Ironworks Gym</dt><dd>Added Sep 25 <a class="edit" href="#">Remove</a></dd></div>
+        </dl>
+      </section>
+
+      <section class="psec">
+        <div><h2>How I reach you</h2><p>For approvals, like a promo that is about to end.</p></div>
+        <dl class="facts">
+          <div><dt>Text message</dt><dd>On <span class="switch on" aria-hidden="true"></span></dd></div>
+          <div><dt>Email</dt><dd>Off <span class="switch" aria-hidden="true"></span></dd></div>
+          <div><dt>Ask before each call</dt><dd>On <span class="switch on" aria-hidden="true"></span></dd></div>
+        </dl>
+      </section>
+
+      <section class="psec">
+        <div><h2>Account</h2></div>
+        <div>
+          <dl class="facts">
+            <div><dt>Calls made</dt><dd>10 across 3 requests <a class="edit" href="calls.html">See calls</a></dd></div>
+            <div><dt>Ledger</dt><dd>5 entries <a class="edit" href="ledger.html">Open ledger</a></dd></div>
+          </dl>
+          <a class="btn btn-line btn-sm signout" href="index.html" style="margin-top:26px">Sign out</a>
+        </div>
+      </section>
+      <p class="dash-note">Static prototype with example data. The person, vendors, prices and timings are made up, and nothing here is wired up.</p>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <a href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+    <a href="calls.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg>Calls</a>
+    <a href="ledger.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Ledger</a>
+    <a href="profile.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg>Profile</a>
+  </nav>
+  
+</body>
+</html>
