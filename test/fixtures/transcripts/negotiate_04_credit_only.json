@@ -1,0 +1,74 @@
+{
+  "id": "negotiate_04_credit_only",
+  "track": "negotiate",
+  "scenario": "one-time credit, rate unchanged",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Harbor Cable?"
+    },
+    {
+      "speaker": "user",
+      "text": "Harbor Cable, Chris speaking."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Chris. I'm an AI assistant calling for Vedant. I'm calling about the account under his name and going over the bill."
+    },
+    {
+      "speaker": "user",
+      "text": "Go ahead."
+    },
+    {
+      "speaker": "agent",
+      "text": "The monthly cost is higher than what's advertised. What promotions or adjustments are available on it right now?"
+    },
+    {
+      "speaker": "user",
+      "text": "The plan is $79.99 and that's the current rate for that tier. I can't lower the rate, but I can put a one-time $30 courtesy credit on the account."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there a student rate on this account?"
+    },
+    {
+      "speaker": "user",
+      "text": "No."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is a one-time credit the best you can do on the account? Nothing on the monthly?"
+    },
+    {
+      "speaker": "user",
+      "text": "Nothing on the monthly. The $30 credit is what I've got."
+    },
+    {
+      "speaker": "agent",
+      "text": "Okay, please apply the credit. When does it show up?"
+    },
+    {
+      "speaker": "user",
+      "text": "It'll post to the current statement."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, a one-time $30 credit on the Harbor Cable account, monthly rate stays at $79.99. Thanks Chris, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Yep, bye."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "reduced",
+    "saved_usd": 30.0,
+    "effective_date": null,
+    "note": null
+  },
+  "notes": "A one-time credit lowers the next statement by $30, so action is reduced with saved 30. No date was given for it, so effective_date is null. $79.99 is the rate, not the saving."
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check your inbox · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+  <div class="sky sky-deep auth">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:60px; width:640px; height:190px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:260px; width:720px; height:210px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <header class="auth-top rise">
+      <a class="brand" href="index.html">Dormammu</a>
+      <p>One request. Every call at once.</p>
+    </header>
+
+    <main class="auth-sheet sheet-up">
+      <ol class="progress" aria-label="Sign-in progress">
+        <li class="done">Email</li>
+        <li class="current" aria-current="step">Confirm</li>
+        <li>Profile</li>
+      </ol>
+
+      <div class="big-mark" aria-hidden="true">@</div>
+      <h1>Check your inbox</h1>
+      <p>We sent a sign-in link to the address you entered. Open it on this device to continue. The link works once and expires after an hour.</p>
+
+      <!-- Static prototype: stands in for clicking the emailed link. -->
+      <a class="btn btn-primary btn-block" href="onboarding.html">Continue as if the link was opened</a>
+
+      <p class="auth-alt">Wrong address? <a href="login.html">Use a different email</a></p>
+      <p class="proto">Static prototype. No email was sent, so the button stands in for the link.</p>
+    </main>
+  </div>
+</body>
+</html>

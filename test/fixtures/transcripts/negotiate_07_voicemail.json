@@ -1,0 +1,26 @@
+{
+  "id": "negotiate_07_voicemail",
+  "track": "negotiate",
+  "scenario": "voicemail, agent only",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": false,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Pacific Broadband?"
+    },
+    {
+      "speaker": "agent",
+      "text": "I'm an AI assistant calling for Vedant about his account. I'll try again later. Thanks, bye."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "none",
+    "saved_usd": null,
+    "effective_date": null,
+    "note": "voicemail, no person reached"
+  },
+  "notes": "One-sided transcript, nobody answered. All nulls, action none, and a note."
+}

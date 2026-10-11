@@ -1,0 +1,17 @@
+{
+  "id": "negotiate_08_empty",
+  "track": "negotiate",
+  "scenario": "empty transcript",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": false,
+  "recap_disagrees": false,
+  "turns": [],
+  "expected": {
+    "track": "negotiate",
+    "action": "none",
+    "saved_usd": null,
+    "effective_date": null,
+    "note": "empty transcript"
+  },
+  "notes": "No turns at all (a call that never connected). The extractor must return empty_outcome without calling the model."
+}

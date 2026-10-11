@@ -1,0 +1,62 @@
+{
+  "id": "quote_02_hourly_clean",
+  "track": "quote",
+  "scenario": "hourly rate with minimum and truck fee",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Peninsula Hauling?"
+    },
+    {
+      "speaker": "user",
+      "text": "Peninsula Hauling, this is Marco."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Marco. I'm an AI assistant calling for Vedant. He's got a one-bedroom move inside Palo Alto on Saturday the 24th. What would that run?"
+    },
+    {
+      "speaker": "user",
+      "text": "Local moves are hourly. Two guys and a truck is $165 an hour, three-hour minimum, and there's a $75 truck fee on top."
+    },
+    {
+      "speaker": "agent",
+      "text": "So $165 an hour, three hours minimum, plus the $75 truck fee. Anything else on top?"
+    },
+    {
+      "speaker": "user",
+      "text": "Tape and shrink wrap if you want it, that's at cost. Otherwise no."
+    },
+    {
+      "speaker": "agent",
+      "text": "What do you have open on the 24th?"
+    },
+    {
+      "speaker": "user",
+      "text": "Saturday's got an 8 a.m. and a 1 p.m."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Peninsula Hauling is $165 an hour, three-hour minimum, plus a $75 truck fee, with 8 a.m. or 1 p.m. open on the 24th. Thanks Marco, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Sure thing."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 165.0,
+    "unit": "per hour",
+    "caveats": [
+      "3-hour minimum",
+      "$75 truck fee",
+      "tape and shrink wrap at cost"
+    ],
+    "note": null
+  },
+  "notes": "Hourly quote. amount_usd is the hourly rate, not a projected total; the truck fee is a caveat, not the price."
+}

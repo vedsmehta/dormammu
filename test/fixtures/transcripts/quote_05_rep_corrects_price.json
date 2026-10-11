@@ -1,0 +1,69 @@
+{
+  "id": "quote_05_rep_corrects_price",
+  "track": "quote",
+  "scenario": "rep corrects the price mid-call",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Mission District Movers?"
+    },
+    {
+      "speaker": "user",
+      "text": "Mission District Movers, Priya speaking."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Priya. I'm an AI assistant calling for Vedant. He's moving a one-bedroom from Palo Alto to San Francisco on Saturday the 24th. What would that run all-in?"
+    },
+    {
+      "speaker": "user",
+      "text": "One bedroom to the city, that's twelve hundred flat. Truck and two movers."
+    },
+    {
+      "speaker": "agent",
+      "text": "$1,200 flat. Anything extra on top?"
+    },
+    {
+      "speaker": "user",
+      "text": "Hold on, you said Saturday? Saturday the 24th?"
+    },
+    {
+      "speaker": "agent",
+      "text": "That's right."
+    },
+    {
+      "speaker": "user",
+      "text": "Sorry, weekends are a different rate. It's $1,350 on a Saturday, not twelve hundred. A weekday would be the twelve."
+    },
+    {
+      "speaker": "agent",
+      "text": "Got it, $1,350 for the Saturday. Does that include stairs?"
+    },
+    {
+      "speaker": "user",
+      "text": "Up to the second floor. Past that it's $50 a flight."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Mission District Movers is $1,350 flat for Saturday October 24th, stairs past the second floor are $50 a flight. Thanks Priya, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Thanks, bye."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 1350.0,
+    "unit": "flat",
+    "caveats": [
+      "weekend rate",
+      "stairs past the second floor $50 per flight"
+    ],
+    "note": null
+  },
+  "notes": "The rep said $1,200 first and corrected to $1,350 for the Saturday before the recap. The corrected number is the price, and the recap agrees with it."
+}

@@ -5,15 +5,21 @@ description = "Parallel AI phone calls for phone-gated bottlenecks"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "livekit-agents[silero]~=1.8",
     "dial-sdk>=0.40.2",
     "python-dotenv>=1.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "supabase>=2.10",
+    "openai>=1.50",
+    "pydantic>=2.8",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    "pytest-httpx>=0.30",
     "ruff>=0.6",
 ]
 

@@ -1,7 +1,7 @@
 # test-lines
 
-Our own controlled IVR test line(s) (Dial number + scripted menu + a human
-playing "rep") for safe, rehearsable demo calls instead of calling a real
-vendor live.
+Controlled numbers to call during a demo. They are entered through `/onboarding` into the
+`vendors` table (`is_demo = true`) and are never committed.
 
-TODO: not implemented.
+`scripts/smoke.py` places one real call to `TEST_CALL_TO` and prints the transcript. That is the
+gate before any multi-call run.

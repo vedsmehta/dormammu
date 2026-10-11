@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calls · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app">
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep app-head">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:70px; width:680px; height:200px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:240px; width:760px; height:220px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="dashboard.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="dashboard.html">Dashboard</a>
+          <a href="calls.html" aria-current="page">Calls</a>
+          <a href="ledger.html">Ledger</a>
+          <a href="profile.html">Profile</a>
+        </div>
+        <div class="nav-end"><a class="avatar" href="profile.html" aria-label="Maya Patel, profile">M</a></div>
+      </nav>
+      <div class="page-title">
+        <h1 class="rise" style="--d:.1s">Calls</h1>
+        <p class="rise" style="--d:.2s">Everything Dormammu has called or texted for you. Open any one to hear the recording and read what was said.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet to-end grab sheet-up" style="--d:.3s">
+    <div class="wrap">
+      <div class="filters" aria-label="Filter (not wired up)">
+        <span class="on">All</span><span>Quotes</span><span>Appointments</span><span>Bills and cancellations</span><span>Needs you</span>
+      </div>
+
+      <section class="request">
+        <div class="request-head">
+          <div><time>Today · running now<i class="tag">Live</i></time><q>I'm moving into my first apartment near campus on the 1st, handle it.</q></div>
+          <a href="run.html">Watch the run</a>
+        </div>
+          <a class="crow" href="call.html">
+            <span class="dot"></span>
+            <span class="who">Sutro Fiber<small>Internet quote</small></span>
+            <span class="what"><s>$70</s>$50/mo<small>Student rate for 12 months, no contract</small></span>
+            <span class="meta num">1:58<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="call.html">
+            <span class="dot"></span>
+            <span class="who">BayLink Internet<small>Internet quote</small></span>
+            <span class="what"><s>$65</s>$55/mo<small>Student rate with an enrollment letter</small></span>
+            <span class="meta num">1:44<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="run.html">
+            <span class="dot texting"></span>
+            <span class="who">Cableton<small>Internet quote</small></span>
+            <span class="what"><span class="t-texting">Texting now</span><small>Nobody picked up, so it switched to text</small></span>
+            <span class="meta num">2 texts<small>Text</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="run.html">
+            <span class="dot talking"></span>
+            <span class="who">Hearth Mutual<small>Renters insurance quote</small></span>
+            <span class="what"><span class="t-talking">Talking now</span><small>Asking for the student rate</small></span>
+            <span class="meta num">Live<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="run.html">
+            <span class="dot talking"></span>
+            <span class="who">Lantern Insurance<small>Renters insurance quote</small></span>
+            <span class="what"><span class="t-talking">Talking now</span><small>Asking for the student rate</small></span>
+            <span class="meta num">Live<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="call.html">
+            <span class="dot"></span>
+            <span class="who">Campus Dental<small>Appointment</small></span>
+            <span class="what">Thu, Oct 15 · 2:30 PM<small>Cleaning booked, 10% off with student ID</small></span>
+            <span class="meta num">1:22<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+      </section>
+
+      <section class="request">
+        <div class="request-head">
+          <div><time>Sep 24 – 25</time><q>Cancel my gym membership back home.</q></div>
+        </div>
+          <a class="crow" href="call.html">
+            <span class="dot"></span>
+            <span class="who">Ironworks Gym<small>Cancellation · second try, Sep 25</small></span>
+            <span class="what">Canceled<small>Last charge Oct 1. Confirmation number on file</small></span>
+            <span class="meta num">4:12<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="call.html">
+            <span class="dot warn"></span>
+            <span class="who">Ironworks Gym<small>Cancellation · first try, Sep 24</small></span>
+            <span class="what">They needed you on the line<small>Would not cancel for a third party. You then added Dormammu as an authorized contact</small></span>
+            <span class="meta num">2:05<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+      </section>
+
+      <section class="request">
+        <div class="request-head">
+          <div><time>Aug 30</time><q>My phone bill is too high, get it down.</q></div>
+        </div>
+          <a class="crow" href="call.html">
+            <span class="dot"></span>
+            <span class="who">Northline Mobile<small>Bill negotiation · retention desk</small></span>
+            <span class="what">No change yet<small>You are already on a student promo until Nov 1. They said to call back within 30 days of it ending</small></span>
+            <span class="meta num">5:24<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+          <a class="crow" href="call.html">
+            <span class="dot warn"></span>
+            <span class="who">Northline Mobile<small>Bill negotiation · first try</small></span>
+            <span class="what">Never reached a person<small>Stuck in the phone menu. Retried on a different path, which worked</small></span>
+            <span class="meta num">3:10<small>Call</small></span>
+            <span class="chev" aria-hidden="true">→</span>
+          </a>
+      </section>
+      <p class="dash-note">Static prototype with example data. The person, vendors, prices and timings are made up, and nothing here is wired up.</p>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <a href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+    <a href="calls.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg>Calls</a>
+    <a href="ledger.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Ledger</a>
+    <a href="profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg>Profile</a>
+  </nav>
+  
+</body>
+</html>

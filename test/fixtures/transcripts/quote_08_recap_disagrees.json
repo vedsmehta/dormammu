@@ -1,0 +1,60 @@
+{
+  "id": "quote_08_recap_disagrees",
+  "track": "quote",
+  "scenario": "recap misstates the price, rep corrects after",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": true,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Redwood Relocation?"
+    },
+    {
+      "speaker": "user",
+      "text": "Redwood Relocation, Sam here."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Sam. I'm an AI assistant calling for Vedant. He's moving a two-bedroom from Palo Alto to San Francisco on Saturday the 24th. What would that run all-in?"
+    },
+    {
+      "speaker": "user",
+      "text": "Two-bedroom to the city on a Saturday, I'd do that at sixteen forty flat. Three guys and a 26-foot truck."
+    },
+    {
+      "speaker": "agent",
+      "text": "Anything extra on top?"
+    },
+    {
+      "speaker": "user",
+      "text": "Only if you add packing. Everything else is in there, stairs, blankets, the lot."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Redwood Relocation is $1,460 flat for Saturday October 24th, packing extra. Thanks Sam."
+    },
+    {
+      "speaker": "user",
+      "text": "No, no. Sixteen forty. One six four zero."
+    },
+    {
+      "speaker": "agent",
+      "text": "Sixteen forty, got it. $1,640 flat. Thanks Sam, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Yep, bye."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 1640.0,
+    "unit": "flat",
+    "caveats": [
+      "packing extra"
+    ],
+    "note": null
+  },
+  "notes": "The recap says $1,460; the rep corrects it to $1,640 right after. The body wins: expected is 1640."
+}

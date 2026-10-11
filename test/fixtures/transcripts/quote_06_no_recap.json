@@ -1,0 +1,60 @@
+{
+  "id": "quote_06_no_recap",
+  "track": "quote",
+  "scenario": "flat rate, agent skipped the recap",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": false,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Sunset Moving Co?"
+    },
+    {
+      "speaker": "user",
+      "text": "Sunset Moving, this is Ben."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Ben. I'm an AI assistant calling for Vedant. He's got a one-bedroom move inside Palo Alto on Saturday the 24th. What would that run?"
+    },
+    {
+      "speaker": "user",
+      "text": "Local one-bedroom, we do that at $1,100 flat. Two movers, truck, blankets, the usual."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is that flat or hourly?"
+    },
+    {
+      "speaker": "user",
+      "text": "Flat for local. Packing's extra if you want it, otherwise that's the number."
+    },
+    {
+      "speaker": "agent",
+      "text": "Okay. Is the 24th open?"
+    },
+    {
+      "speaker": "user",
+      "text": "Yeah, we've got room that Saturday."
+    },
+    {
+      "speaker": "agent",
+      "text": "Great, that's all I needed. Thanks Ben, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 1100.0,
+    "unit": "flat",
+    "caveats": [
+      "packing extra"
+    ],
+    "note": null
+  },
+  "notes": "No 'Just to confirm' line. The extractor has to read the body."
+}

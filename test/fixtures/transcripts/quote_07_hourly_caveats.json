@@ -1,0 +1,63 @@
+{
+  "id": "quote_07_hourly_caveats",
+  "track": "quote",
+  "scenario": "hourly with several caveats",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Bayshore Movers?"
+    },
+    {
+      "speaker": "user",
+      "text": "Bayshore, this is Teresa."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Teresa. I'm an AI assistant calling for Vedant. He's moving a two-bedroom from Palo Alto to San Jose on Saturday the 24th. What would that run?"
+    },
+    {
+      "speaker": "user",
+      "text": "We're hourly for anything under fifty miles. Two-bedroom I'd send three movers, that's $140 an hour, four-hour minimum."
+    },
+    {
+      "speaker": "agent",
+      "text": "Anything on top of the hourly?"
+    },
+    {
+      "speaker": "user",
+      "text": "There's a $90 travel fee, one-time, and Saturdays carry a fifteen percent weekend surcharge. Tolls get passed through if there are any."
+    },
+    {
+      "speaker": "agent",
+      "text": "So $140 an hour, four-hour minimum, $90 travel fee, and fifteen percent extra on Saturday."
+    },
+    {
+      "speaker": "user",
+      "text": "That's it. You'd probably be looking at five, six hours for a two-bedroom."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Bayshore is $140 an hour with a four-hour minimum, a $90 travel fee, plus a fifteen percent surcharge on Saturday October 24th. Thanks Teresa, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Alright, bye."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 140.0,
+    "unit": "per hour",
+    "caveats": [
+      "4-hour minimum",
+      "$90 travel fee",
+      "15 percent weekend surcharge",
+      "tolls passed through"
+    ],
+    "note": null
+  },
+  "notes": "Hourly with four caveats. The five-to-six-hour remark is an estimate of duration, not a price."
+}

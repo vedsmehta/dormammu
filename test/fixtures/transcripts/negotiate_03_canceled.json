@@ -1,0 +1,66 @@
+{
+  "id": "negotiate_03_canceled",
+  "track": "negotiate",
+  "scenario": "line canceled at the client's request",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Metro Telecom?"
+    },
+    {
+      "speaker": "user",
+      "text": "Metro Telecom billing, Devon."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Devon. I'm an AI assistant calling for Vedant. I'm calling about the account under his name. He's moved and wants the home phone line on the account canceled, keeping the internet."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay. Just the voice line, keep the internet?"
+    },
+    {
+      "speaker": "agent",
+      "text": "That's right."
+    },
+    {
+      "speaker": "user",
+      "text": "I can do that. The voice line is $35 a month. If I cancel it today it ends at the close of this billing cycle, which is October 31st, so the November bill would be $35 less."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there any fee to cancel it?"
+    },
+    {
+      "speaker": "user",
+      "text": "No, it's month to month."
+    },
+    {
+      "speaker": "agent",
+      "text": "Go ahead then. Could you email a confirmation with a reference number?"
+    },
+    {
+      "speaker": "user",
+      "text": "Done. Reference number's in the email. Line is canceled effective the 31st."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, the home phone line is canceled effective October 31st, which takes $35 a month off the bill. Thanks Devon, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "canceled",
+    "saved_usd": 35.0,
+    "effective_date": "2026-10-31",
+    "note": null
+  },
+  "notes": "The client's objective was the cancellation. action canceled, saved is the line's monthly cost, effective Oct 31."
+}

@@ -1,0 +1,825 @@
+{
+  "generated_at": "2026-10-11T21:54:09+00:00",
+  "model": "gpt-4.1",
+  "n": 24,
+  "exact_rate": 1.0,
+  "field_rates": {
+    "action": 1.0,
+    "saved_usd": 1.0,
+    "effective_date": 1.0,
+    "amount_usd": 1.0,
+    "unit": 1.0,
+    "slot_iso": 1.0,
+    "confirmed": 1.0
+  },
+  "by_track": {
+    "quote": {
+      "n": 8,
+      "exact_rate": 1.0,
+      "field_rates": {
+        "amount_usd": 1.0,
+        "unit": 1.0
+      }
+    },
+    "schedule": {
+      "n": 8,
+      "exact_rate": 1.0,
+      "field_rates": {
+        "slot_iso": 1.0,
+        "confirmed": 1.0
+      }
+    },
+    "negotiate": {
+      "n": 8,
+      "exact_rate": 1.0,
+      "field_rates": {
+        "action": 1.0,
+        "saved_usd": 1.0,
+        "effective_date": 1.0
+      }
+    }
+  },
+  "recap": {
+    "checked": 15,
+    "agreed": 13,
+    "rate": 0.8667
+  },
+  "errors": 0,
+  "tolerances": {
+    "amount_usd": "within $1",
+    "unit": "same meaning (flat, per hour, per month)",
+    "slot_iso": "same day and hour, any offset",
+    "confirmed": "equal",
+    "action": "equal",
+    "saved_usd": "within $1",
+    "effective_date": "same date",
+    "caveats": "not scored",
+    "note": "not scored"
+  },
+  "fixtures": {
+    "dir": "test/fixtures/transcripts",
+    "no_recap": 6,
+    "recap_disagrees": 2
+  },
+  "cases": [
+    {
+      "id": "negotiate_01_reduced_effective",
+      "track": "negotiate",
+      "scenario": "loyalty discount with an effective date",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "reduced",
+        "saved_usd": 25.0,
+        "effective_date": "2026-11-01",
+        "note": null
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "reduced",
+        "saved_usd": 25.0,
+        "effective_date": "2026-11-01",
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.46
+    },
+    {
+      "id": "negotiate_02_refused",
+      "track": "negotiate",
+      "scenario": "retention refuses every ask",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "refused",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": null
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "refused",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 2.32
+    },
+    {
+      "id": "negotiate_03_canceled",
+      "track": "negotiate",
+      "scenario": "line canceled at the client's request",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "canceled",
+        "saved_usd": 35.0,
+        "effective_date": "2026-10-31",
+        "note": null
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "canceled",
+        "saved_usd": 35.0,
+        "effective_date": "2026-10-31",
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.78
+    },
+    {
+      "id": "negotiate_04_credit_only",
+      "track": "negotiate",
+      "scenario": "one-time credit, rate unchanged",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "reduced",
+        "saved_usd": 30.0,
+        "effective_date": null,
+        "note": null
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "reduced",
+        "saved_usd": 30.0,
+        "effective_date": null,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.29
+    },
+    {
+      "id": "negotiate_05_promo_reverts",
+      "track": "negotiate",
+      "scenario": "promo that steps up above today's rate, declined",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "none",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": "no outcome stated"
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "none",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": "no outcome stated"
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 1.1
+    },
+    {
+      "id": "negotiate_06_no_recap_reduced",
+      "track": "negotiate",
+      "scenario": "autopay credit added, agent skipped the recap",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "reduced",
+        "saved_usd": 10.0,
+        "effective_date": "2026-10-20",
+        "note": null
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "reduced",
+        "saved_usd": 10.0,
+        "effective_date": "2026-10-20",
+        "note": null
+      },
+      "has_recap": false,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 1.02
+    },
+    {
+      "id": "negotiate_07_voicemail",
+      "track": "negotiate",
+      "scenario": "voicemail, agent only",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "none",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": "voicemail, no person reached"
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "none",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": "Call did not reach a person. Agent stated they would try again later."
+      },
+      "has_recap": false,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 1.05
+    },
+    {
+      "id": "negotiate_08_empty",
+      "track": "negotiate",
+      "scenario": "empty transcript",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "action": true,
+        "saved_usd": true,
+        "effective_date": true
+      },
+      "expected": {
+        "track": "negotiate",
+        "action": "none",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": "empty transcript"
+      },
+      "actual": {
+        "track": "negotiate",
+        "action": "none",
+        "saved_usd": null,
+        "effective_date": null,
+        "note": "empty transcript"
+      },
+      "has_recap": false,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 0.0
+    },
+    {
+      "id": "quote_01_flat_clean",
+      "track": "quote",
+      "scenario": "flat rate, clean recap",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 1450.0,
+        "unit": "flat",
+        "caveats": [
+          "packing materials not included",
+          "$200 deposit to hold the date"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 1450.0,
+        "unit": "flat",
+        "caveats": [
+          "packing materials extra",
+          "$200 deposit to hold date"
+        ],
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 0.83
+    },
+    {
+      "id": "quote_02_hourly_clean",
+      "track": "quote",
+      "scenario": "hourly rate with minimum and truck fee",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 165.0,
+        "unit": "per hour",
+        "caveats": [
+          "3-hour minimum",
+          "$75 truck fee",
+          "tape and shrink wrap at cost"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 165.0,
+        "unit": "per hour",
+        "caveats": [
+          "three-hour minimum",
+          "$75 truck fee",
+          "tape and shrink wrap at cost"
+        ],
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 0.82
+    },
+    {
+      "id": "quote_03_no_price",
+      "track": "quote",
+      "scenario": "no price given, walkthrough required",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": null,
+        "unit": null,
+        "caveats": [
+          "in-home walkthrough required for a binding quote"
+        ],
+        "note": "no price stated"
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": null,
+        "unit": null,
+        "caveats": [
+          "in-person walkthrough required before quote",
+          "walkthrough is free"
+        ],
+        "note": "no price stated"
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 0.96
+    },
+    {
+      "id": "quote_04_rambling_two_numbers",
+      "track": "quote",
+      "scenario": "rambling rep, two numbers, one total",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 1380.0,
+        "unit": "flat",
+        "caveats": [
+          "packing quoted separately",
+          "date not yet confirmed"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 1380.0,
+        "unit": "flat",
+        "caveats": [
+          "packing quoted separately"
+        ],
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.05
+    },
+    {
+      "id": "quote_05_rep_corrects_price",
+      "track": "quote",
+      "scenario": "rep corrects the price mid-call",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 1350.0,
+        "unit": "flat",
+        "caveats": [
+          "weekend rate",
+          "stairs past the second floor $50 per flight"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 1350.0,
+        "unit": "flat",
+        "caveats": [
+          "stairs past second floor $50 per flight"
+        ],
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 0.98
+    },
+    {
+      "id": "quote_06_no_recap",
+      "track": "quote",
+      "scenario": "flat rate, agent skipped the recap",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 1100.0,
+        "unit": "flat",
+        "caveats": [
+          "packing extra"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 1100.0,
+        "unit": "flat",
+        "caveats": [
+          "packing extra"
+        ],
+        "note": null
+      },
+      "has_recap": false,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 0.88
+    },
+    {
+      "id": "quote_07_hourly_caveats",
+      "track": "quote",
+      "scenario": "hourly with several caveats",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 140.0,
+        "unit": "per hour",
+        "caveats": [
+          "4-hour minimum",
+          "$90 travel fee",
+          "15 percent weekend surcharge",
+          "tolls passed through"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 140.0,
+        "unit": "per hour",
+        "caveats": [
+          "four-hour minimum",
+          "$90 travel fee, one-time",
+          "15% weekend surcharge on Saturday",
+          "tolls additional if applicable"
+        ],
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.2
+    },
+    {
+      "id": "quote_08_recap_disagrees",
+      "track": "quote",
+      "scenario": "recap misstates the price, rep corrects after",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "amount_usd": true,
+        "unit": true
+      },
+      "expected": {
+        "track": "quote",
+        "amount_usd": 1640.0,
+        "unit": "flat",
+        "caveats": [
+          "packing extra"
+        ],
+        "note": null
+      },
+      "actual": {
+        "track": "quote",
+        "amount_usd": 1640.0,
+        "unit": "flat",
+        "caveats": [
+          "packing extra"
+        ],
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": true,
+      "recap_agrees": false,
+      "error": null,
+      "seconds": 1.05
+    },
+    {
+      "id": "schedule_01_dentist_confirmed",
+      "track": "schedule",
+      "scenario": "dentist, confirmed Thursday slot",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-10-15T14:30:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-10-15T14:30-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.14
+    },
+    {
+      "id": "schedule_02_clinic_tomorrow",
+      "track": "schedule",
+      "scenario": "clinic, confirmed for tomorrow morning",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-10-14T09:15:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-10-14T09:15-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 0.93
+    },
+    {
+      "id": "schedule_03_pencil_in",
+      "track": "schedule",
+      "scenario": "penciled in, not confirmed",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-10-19T11:00:00-07:00",
+        "confirmed": false,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-10-19T11:00-07:00",
+        "confirmed": false,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 0.93
+    },
+    {
+      "id": "schedule_04_rescheduled_later_wins",
+      "track": "schedule",
+      "scenario": "first slot withdrawn, later slot wins",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-10-16T09:00:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-10-16T09:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 1.06
+    },
+    {
+      "id": "schedule_05_no_slot",
+      "track": "schedule",
+      "scenario": "no availability, no recap",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": null,
+        "confirmed": false,
+        "note": "no slot stated"
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": null,
+        "confirmed": false,
+        "note": "No appointment available; client must call to join waitlist."
+      },
+      "has_recap": false,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 0.94
+    },
+    {
+      "id": "schedule_06_no_recap_confirmed",
+      "track": "schedule",
+      "scenario": "confirmed next Tuesday, agent skipped the recap",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-10-20T16:00:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-10-20T16:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "has_recap": false,
+      "recap_disagrees": false,
+      "recap_agrees": null,
+      "error": null,
+      "seconds": 0.82
+    },
+    {
+      "id": "schedule_07_recap_disagrees",
+      "track": "schedule",
+      "scenario": "recap names the wrong day, rep corrects after",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-10-21T08:00:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-10-21T08:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": true,
+      "recap_agrees": false,
+      "error": null,
+      "seconds": 0.76
+    },
+    {
+      "id": "schedule_08_next_month",
+      "track": "schedule",
+      "scenario": "confirmed, date in the next month",
+      "exact": true,
+      "partial": 1.0,
+      "fields": {
+        "slot_iso": true,
+        "confirmed": true
+      },
+      "expected": {
+        "track": "schedule",
+        "slot_iso": "2026-11-03T13:00:00-08:00",
+        "confirmed": true,
+        "note": null
+      },
+      "actual": {
+        "track": "schedule",
+        "slot_iso": "2026-11-03T13:00-07:00",
+        "confirmed": true,
+        "note": null
+      },
+      "has_recap": true,
+      "recap_disagrees": false,
+      "recap_agrees": true,
+      "error": null,
+      "seconds": 0.83
+    }
+  ]
+}

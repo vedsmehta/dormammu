@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dormammu: one request, every phone call at once</title>
+  <meta name="description" content="Dormammu knows your profile, calls every vendor at once to find the best deals you qualify for, waits for your approval, then closes and negotiates for you.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+
+  <header class="sky sky-deep">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift thin" style="left:-6%; top:120px; width:520px; height:150px; animation-duration:80s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-8%; top:260px; width:600px; height:170px; animation-duration:95s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+      <div class="drift" style="left:-12%; bottom:150px; width:720px; height:210px; animation-duration:70s"><i class="cloud"></i></div>
+      <div class="drift" style="right:-14%; bottom:90px; width:780px; height:230px; animation-duration:88s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+      <div class="drift" style="left:28%; bottom:-70px; width:680px; height:190px; animation-duration:64s"><i class="cloud"></i></div>
+    </div>
+
+    <div class="wrap">
+      <nav class="nav rise" aria-label="Main">
+        <a class="brand" href="index.html">Dormammu</a>
+        <div class="nav-links">
+          <a href="#how">How it works</a>
+          <a href="#handles">What it handles</a>
+          <a href="#negotiation">Negotiation</a>
+          <a href="#ledger">Ledger</a>
+        </div>
+        <div class="nav-end">
+          <a href="login.html">Sign in</a>
+          <a class="btn btn-primary btn-sm" href="login.html">Get started</a>
+        </div>
+      </nav>
+
+      <div class="hero">
+        <h1 class="rise" style="--d:.1s">One request.<br>Every call at once.</h1>
+        <p class="lede rise" style="--d:.25s">
+          Dormammu knows who it is calling for: a student, a veteran, someone new in town.
+          It calls every vendor at once to find the best deals you qualify for and shows you the options.
+          Once you approve, it closes the deal and negotiates the price for you.
+        </p>
+        <div class="fan">
+          <form class="askbox rise" style="--d:.4s" action="login.html" data-ask-form>
+            <input type="text" data-ask value="I'm moving into my first apartment near campus on the 1st, handle it." aria-label="What do you need handled?" placeholder="What do you need handled?" autocomplete="off">
+            <button type="submit" class="btn btn-primary">Handle it</button>
+          </form>
+          <div class="chips rise" style="--d:.5s" aria-label="Try an example">
+            <button type="button" class="glass-pill" aria-pressed="true" data-scene="move" data-fill="I'm moving into my first apartment near campus on the 1st, handle it.">Moving in</button>
+            <button type="button" class="glass-pill" aria-pressed="false" data-scene="bill" data-fill="My phone bill is too high, get it down.">Lower a bill</button>
+            <button type="button" class="glass-pill" aria-pressed="false" data-scene="dentist" data-fill="Find me a dentist near campus this week.">Book a dentist</button>
+            <button type="button" class="glass-pill" aria-pressed="false" data-scene="cancel" data-fill="Cancel the subscriptions I don't use.">Cancel something</button>
+          </div>
+
+          <svg class="fan-lines" viewBox="0 0 1000 250" aria-hidden="true">
+            <defs>
+              <linearGradient id="fan-stroke" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="250">
+                <stop offset="0" stop-color="#fff"/>
+                <stop offset="1" stop-color="#86f7e2"/>
+              </linearGradient>
+            </defs>
+            <path id="f0" style="--i:0" pathLength="1" d="M500 0 C500 150 83 90 83 250"/>
+            <path id="f1" style="--i:1" pathLength="1" d="M500 0 C500 150 250 90 250 250"/>
+            <path id="f2" style="--i:2" pathLength="1" d="M500 0 C500 150 417 90 417 250"/>
+            <path id="f3" style="--i:3" pathLength="1" d="M500 0 C500 150 583 90 583 250"/>
+            <path id="f4" style="--i:4" pathLength="1" d="M500 0 C500 150 750 90 750 250"/>
+            <path id="f5" style="--i:5" pathLength="1" d="M500 0 C500 150 917 90 917 250"/>
+            <circle r="3.5"><animateMotion dur="2.8s" begin="-0.3s" repeatCount="indefinite"><mpath href="#f0"/></animateMotion></circle>
+            <circle r="3.5"><animateMotion dur="2.8s" begin="-1.9s" repeatCount="indefinite"><mpath href="#f1"/></animateMotion></circle>
+            <circle r="3.5"><animateMotion dur="2.8s" begin="-1.1s" repeatCount="indefinite"><mpath href="#f2"/></animateMotion></circle>
+            <circle r="3.5"><animateMotion dur="2.8s" begin="-2.4s" repeatCount="indefinite"><mpath href="#f3"/></animateMotion></circle>
+            <circle r="3.5"><animateMotion dur="2.8s" begin="-0.7s" repeatCount="indefinite"><mpath href="#f4"/></animateMotion></circle>
+            <circle r="3.5"><animateMotion dur="2.8s" begin="-1.5s" repeatCount="indefinite"><mpath href="#f5"/></animateMotion></circle>
+          </svg>
+
+          <ol class="ends" aria-label="Example: six calls placed at once" aria-live="polite">
+            <li style="--i:0"><span class="dot"></span><b>Sutro Fiber</b><span class="got"><s>$70</s>$50/mo</span><small>Best internet quote</small></li>
+            <li style="--i:1"><span class="dot"></span><b>BayLink Internet</b><span class="got"><s>$65</s>$55/mo</span><small>Done</small></li>
+            <li style="--i:2"><span class="dot texting"></span><b>Cableton</b><span class="got t-texting">Texting</span><small>No answer, so it switched to text</small></li>
+            <li style="--i:3"><span class="dot talking"></span><b>Hearth Mutual</b><span class="got t-talking">Talking</span><small>Asking for the student rate</small></li>
+            <li style="--i:4"><span class="dot ringing"></span><b>Lantern Insurance</b><span class="got t-ringing">Ringing</span><small>Renters insurance</small></li>
+            <li style="--i:5"><span class="dot"></span><b>Campus Dental</b><span class="got">Thu 2:30</span><small>Cleaning booked</small></li>
+          </ol>
+          <p class="fan-note">Example runs. Vendors and prices are made up. “Handle it” takes you to sign in.</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="sheet">
+    <div class="statement">
+      <div class="wrap">
+        <p class="reveal">
+          Finding a good deal means calling around.
+          <strong>Getting it means knowing what to ask for, and negotiating.</strong>
+          Dormammu does both, and nothing goes ahead until you say yes.
+        </p>
+      </div>
+    </div>
+
+    <div class="marquee" aria-hidden="true">
+      <div>
+        <span>internet quotes</span><span>renters insurance</span><span>a dentist near campus</span><span>movers</span><span>the ISP you forgot to cancel</span><span>the bill that went up</span>
+        <span>internet quotes</span><span>renters insurance</span><span>a dentist near campus</span><span>movers</span><span>the ISP you forgot to cancel</span><span>the bill that went up</span>
+      </div>
+    </div>
+
+    <section class="section" id="how">
+      <div class="wrap">
+        <span class="eyebrow">How it works</span>
+        <h2 class="reveal">It finds the deals. You approve. It closes them.</h2>
+        <ol class="steps-list">
+          <li class="reveal">
+            <span class="n">01</span>
+            <h3>It learns your profile</h3>
+            <p>Student, veteran, senior, new in town, or none of these. Your profile decides which discounts it asks for and what proof a vendor will want.</p>
+          </li>
+          <li class="reveal">
+            <span class="n">02</span>
+            <h3>It finds the best deals</h3>
+            <p>One request sends out every call at once. Each call asks for the rates you qualify for, so you see prices most people never get quoted.</p>
+          </li>
+          <li class="reveal">
+            <span class="n">03</span>
+            <h3>You choose</h3>
+            <p>Options come back ranked, with and without your discount. Nothing is signed, booked or canceled until you approve it.</p>
+          </li>
+          <li class="reveal">
+            <span class="n">04</span>
+            <h3>It executes and negotiates</h3>
+            <p>It calls back to lock in what you picked, and pushes on the price using our negotiation harness.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" id="handles">
+      <div class="wrap">
+        <span class="eyebrow">What it handles</span>
+        <ul class="handles">
+          <li class="reveal">
+            <h3>Compare quotes</h3>
+            <p>Internet, renters insurance, movers. Several vendors called in parallel and compared side by side, with and without your discount.</p>
+          </li>
+          <li class="reveal">
+            <h3>Book appointments</h3>
+            <p>Doctors, dentists and repair shops that only book by phone. Dormammu checks when you are free and locks in a time.</p>
+          </li>
+          <li class="reveal">
+            <h3>Negotiate and cancel</h3>
+            <p>Calls to ask for a better rate, or to cancel the service you stopped using months ago.</p>
+          </li>
+        </ul>
+        <p class="handles-note reveal">Nobody picks up? Dormammu carries the same conversation over text instead of leaving a "call us back".</p>
+      </div>
+    </section>
+
+    <section class="section" id="negotiation">
+      <div class="wrap">
+        <span class="eyebrow">The negotiation harness</span>
+        <h2 class="reveal">It negotiates the way the research says works.</h2>
+        <ul class="handles tight">
+          <li class="reveal">
+            <h3>Reaches the right desk</h3>
+            <p>It gets to the retention team, where the discounts are, instead of general customer service.</p>
+          </li>
+          <li class="reveal">
+            <h3>Asks for your rate first</h3>
+            <p>The student, veteran or senior rate is asked for on every call, before any deal is closed.</p>
+          </li>
+          <li class="reveal">
+            <h3>Asks for the best price, then waits</h3>
+            <p>It asks what the lowest available rate is and stays quiet. That silence costs nothing and moves numbers.</p>
+          </li>
+          <li class="reveal">
+            <h3>Stays honest</h3>
+            <p>It only cites real advertised prices. It never invents a competing offer, a hardship or a problem with the service.</p>
+          </li>
+          <li class="reveal">
+            <h3>Knows when to stop</h3>
+            <p>Two escalations at most. Any offer that comes with conditions is brought back to you, not accepted.</p>
+          </li>
+        </ul>
+        <p class="handles-note reveal">The harness is a step-by-step playbook built from published research on bill negotiation and tested before it calls for you.</p>
+      </div>
+    </section>
+
+    <section class="section" id="ledger">
+      <div class="wrap duo">
+        <div class="copy reveal">
+          <span class="eyebrow">The ledger</span>
+          <h2>It remembers every account, so you don't have to.</h2>
+          <p>Each call writes down what was agreed: the vendor, the rate, when the promo ends, when it renews. That list is yours, in one place.</p>
+          <p>When a date comes up, Dormammu asks first. You say yes, it makes the call.</p>
+        </div>
+        <div class="thread" aria-label="Example conversation">
+          <small class="reveal">Eleven months later</small>
+          <p class="bubble reveal">Your Sutro Fiber promo ends in 21 days. Your bill goes from $50 to $70 a month. Want me to call and ask them to keep the rate?</p>
+          <p class="bubble me reveal">Yes, call them.</p>
+          <p class="bubble reveal">Done. They kept you at $50 for another 12 months. You will need to re-verify your .edu email.</p>
+          <small class="reveal">Example. The vendor and prices are made up.</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="profile">
+      <div class="wrap duo">
+        <div class="copy reveal">
+          <span class="eyebrow">Your profile</span>
+          <h2>It asks for what you actually qualify for.</h2>
+          <p>Many discounts exist but only get applied when someone asks. Dormammu knows your profile, asks on every call, and shows each quote with and without the discount.</p>
+          <p>It only ever claims what is true about you, and you can read exactly what the agent is told to ask for.</p>
+        </div>
+        <ul class="asks reveal" aria-label="Profiles Dormammu understands">
+          <li>student</li>
+          <li>veteran or military</li>
+          <li>senior</li>
+          <li>new mover</li>
+          <li>none of these</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="sky sky-dusk closing">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-10%; top:240px; width:700px; height:200px; animation-duration:74s"><i class="cloud"></i></div>
+      <div class="drift" style="right:-12%; top:300px; width:760px; height:220px; animation-duration:90s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+      <div class="drift thin" style="left:30%; bottom:40px; width:640px; height:170px; animation-duration:66s"><i class="cloud"></i></div>
+    </div>
+    <div class="wrap">
+      <h2 class="reveal">Hand off the phone calls.</h2>
+      <p class="reveal">Sign in with your email. There is no password to remember.</p>
+      <div class="hero-cta reveal">
+        <a class="btn btn-primary" href="login.html">Get started</a>
+        <a class="btn btn-glass" href="login.html">Sign in</a>
+      </div>
+
+      <div class="footer">
+        <a class="brand" href="index.html">Dormammu</a>
+        <nav aria-label="Footer">
+          <a href="#how">How it works</a>
+          <a href="#ledger">Ledger</a>
+          <a href="login.html">Sign in</a>
+        </nav>
+        <span class="fine">Built at SpeedHacks, Oct 2026. Static prototype: nothing on this site is wired up yet.</span>
+      </div>
+    </div>
+  </footer>
+  <script src="ask.js"></script>
+</body>
+</html>

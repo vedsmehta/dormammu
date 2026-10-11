@@ -1,0 +1,82 @@
+{
+  "id": "negotiate_02_refused",
+  "track": "negotiate",
+  "scenario": "retention refuses every ask",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Coastal Wireless?"
+    },
+    {
+      "speaker": "user",
+      "text": "Coastal Wireless, this is Mia."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Mia. I'm an AI assistant calling for Vedant. I'm calling about the account under his name and going over the bill."
+    },
+    {
+      "speaker": "user",
+      "text": "Sure. What's the question?"
+    },
+    {
+      "speaker": "agent",
+      "text": "The monthly cost is higher than what's advertised. What promotions or adjustments are available on it right now?"
+    },
+    {
+      "speaker": "user",
+      "text": "I'm looking... there's nothing I can apply to this account. It's already on a promotional rate from last year."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there a student rate on this account?"
+    },
+    {
+      "speaker": "user",
+      "text": "No, we don't do that."
+    },
+    {
+      "speaker": "agent",
+      "text": "Can the current new-customer promotion apply to an existing account?"
+    },
+    {
+      "speaker": "user",
+      "text": "No. That's for new lines only."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there a credit for autopay or paperless billing?"
+    },
+    {
+      "speaker": "user",
+      "text": "He's already got both."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there a supervisor or retention specialist who could look at it?"
+    },
+    {
+      "speaker": "user",
+      "text": "I am retention. There's nothing to apply. The rate is the rate until the promo ends in March."
+    },
+    {
+      "speaker": "agent",
+      "text": "Understood. I appreciate you looking into it. Just to confirm, no adjustments available on the account right now. Thanks Mia, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "refused",
+    "saved_usd": null,
+    "effective_date": null,
+    "note": null
+  },
+  "notes": "Every probe declined. action is refused; 'March' is when the existing promo ends, not an effective date."
+}

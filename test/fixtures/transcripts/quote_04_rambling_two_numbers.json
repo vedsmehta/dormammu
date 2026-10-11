@@ -1,0 +1,69 @@
+{
+  "id": "quote_04_rambling_two_numbers",
+  "track": "quote",
+  "scenario": "rambling rep, two numbers, one total",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Sunrise Moving?"
+    },
+    {
+      "speaker": "user",
+      "text": "Yeah, Sunrise, this is Lou, hang on... okay, go ahead."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Lou. I'm an AI assistant calling for Vedant. He's moving a one-bedroom from Palo Alto to San Francisco on Saturday the 24th. What would that run all-in?"
+    },
+    {
+      "speaker": "user",
+      "text": "One bedroom, okay. So, funny thing, we did a studio to the city last week, that one came out to nine hundred, but that was a studio, no stairs, guy barely had furniture. Yours is a one bedroom, you said?"
+    },
+    {
+      "speaker": "agent",
+      "text": "One bedroom, third floor walk-up on the San Francisco end."
+    },
+    {
+      "speaker": "user",
+      "text": "Walk-up, okay, that adds. Let me think. Truck, two guys, the drive, the stairs... I'd say thirteen eighty. $1,380 for the whole thing. That's flat, we don't nickel and dime."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is anything extra on top of that?"
+    },
+    {
+      "speaker": "user",
+      "text": "Nope. Well, if you want us to pack, that's a different quote, but the move itself, thirteen eighty."
+    },
+    {
+      "speaker": "agent",
+      "text": "And is the 24th open?"
+    },
+    {
+      "speaker": "user",
+      "text": "Should be. I'd have to check the board but I think so."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Sunrise is $1,380 flat for the October 24th one-bedroom move, packing quoted separately. Thanks Lou, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "You got it."
+    }
+  ],
+  "expected": {
+    "track": "quote",
+    "amount_usd": 1380.0,
+    "unit": "flat",
+    "caveats": [
+      "packing quoted separately",
+      "date not yet confirmed"
+    ],
+    "note": null
+  },
+  "notes": "The $900 is last week's studio, not this job. Only $1,380 is the total."
+}

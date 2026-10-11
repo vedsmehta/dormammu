@@ -1,0 +1,57 @@
+{
+  "id": "schedule_01_dentist_confirmed",
+  "track": "schedule",
+  "scenario": "dentist, confirmed Thursday slot",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Palo Alto Smiles Dental?"
+    },
+    {
+      "speaker": "user",
+      "text": "Palo Alto Smiles, this is Kim."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Kim. I'm an AI assistant calling for Vedant. He needs a cleaning and he's free weekday afternoons. What's the earliest you have?"
+    },
+    {
+      "speaker": "user",
+      "text": "Let me look. For a cleaning I've got Thursday at 2:30 with Dr. Nakamura, or next Tuesday at 3."
+    },
+    {
+      "speaker": "agent",
+      "text": "Thursday at 2:30 works. Can you book that under Vedant?"
+    },
+    {
+      "speaker": "user",
+      "text": "Sure. Is he a current patient?"
+    },
+    {
+      "speaker": "agent",
+      "text": "He is."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay, Thursday the 15th at 2:30, Vedant, you're all set. Have him come ten minutes early."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Thursday October 15th at 2:30 p.m. with Dr. Nakamura, arriving ten minutes early. Thanks Kim, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-10-15T14:30:00-07:00",
+    "confirmed": true,
+    "note": null
+  },
+  "notes": "Two slots offered, the Thursday one taken and confirmed. Call is Tuesday Oct 13, so Thursday is Oct 15."
+}

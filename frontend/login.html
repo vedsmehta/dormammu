@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Dormammu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Outfit:wght@300;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="cloud-defs" aria-hidden="true">
+    <filter id="cloud">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="150"/>
+    </filter>
+  </svg>
+  <div class="sky sky-deep auth">
+    <div class="clouds" aria-hidden="true">
+      <div class="drift" style="left:-12%; top:60px; width:640px; height:190px; animation-duration:76s"><i class="cloud"></i></div>
+      <div class="drift thin" style="right:-14%; top:260px; width:720px; height:210px; animation-duration:92s; animation-direction:alternate-reverse"><i class="cloud"></i></div>
+    </div>
+    <header class="auth-top rise">
+      <a class="brand" href="index.html">Dormammu</a>
+      <p>One request. Every call at once.</p>
+    </header>
+
+    <main class="auth-sheet sheet-up">
+      <ol class="progress" aria-label="Sign-in progress">
+        <li class="current" aria-current="step">Email</li>
+        <li>Confirm</li>
+        <li>Profile</li>
+      </ol>
+
+      <p class="pending" data-ask-echo hidden>Once you are in, Dormammu starts on <q></q></p>
+      <h1>Sign in or create an account</h1>
+      <p>Enter your email and we will send you a one-time sign-in link. There is no password.</p>
+
+      <!-- Static prototype: the form only navigates to the next screen. -->
+      <form action="check-email.html">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@university.edu" autocomplete="email">
+          <p class="hint">Have a university email? Use it. It doubles as proof for student rates.</p>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Email me a sign-in link</button>
+      </form>
+
+      <p class="auth-alt">New here? The same link creates your account.</p>
+      <p class="proto">Static prototype. Nothing is sent or saved.</p>
+    </main>
+  </div>
+  <script src="ask.js"></script>
+</body>
+</html>

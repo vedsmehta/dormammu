@@ -1,0 +1,82 @@
+{
+  "id": "negotiate_01_reduced_effective",
+  "track": "negotiate",
+  "scenario": "loyalty discount with an effective date",
+  "call_time": "2026-10-13T14:05:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Bayline Internet?"
+    },
+    {
+      "speaker": "user",
+      "text": "Bayline Internet, retention department, this is Jordan. How can I help?"
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Jordan. I'm an AI assistant calling for Vedant. I'm calling about the account under his name and going over the bill."
+    },
+    {
+      "speaker": "user",
+      "text": "Okay. I've got the account up. What's going on with it?"
+    },
+    {
+      "speaker": "agent",
+      "text": "The monthly cost is higher than what's advertised right now. What promotions or adjustments are available on it?"
+    },
+    {
+      "speaker": "user",
+      "text": "Let's see. You're at $89.99 on the 500 meg plan. New customers are getting that at $64.99. I can't do the new-customer price, but I can apply a loyalty discount of $25 a month for twelve months."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there a student rate on this account? He's a full-time student."
+    },
+    {
+      "speaker": "user",
+      "text": "We don't have a student rate on residential, no."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is $25 off the best rate available on the account?"
+    },
+    {
+      "speaker": "user",
+      "text": "That's the best I can do without changing the plan."
+    },
+    {
+      "speaker": "agent",
+      "text": "So that's $64.99 a month including taxes and fees, starting when, for twelve months?"
+    },
+    {
+      "speaker": "user",
+      "text": "It'd be $64.99 plus taxes, taxes run about four dollars. It starts with the next billing cycle, which is November 1st, for twelve months, then it goes back to the standard rate."
+    },
+    {
+      "speaker": "agent",
+      "text": "Okay, let's do that. Could you email a confirmation with a reference number and your name?"
+    },
+    {
+      "speaker": "user",
+      "text": "Sure, that'll go to the email on file. Reference is on the email."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, $25 a month off the Bayline bill starting November 1st for twelve months, confirmation coming by email. Thanks Jordan, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Thanks for calling."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "reduced",
+    "saved_usd": 25.0,
+    "effective_date": "2026-11-01",
+    "note": null
+  },
+  "notes": "Bill lowered by $25 a month from the next cycle, Nov 1. The $64.99 and $89.99 are rates, not the saving."
+}

@@ -1,0 +1,57 @@
+{
+  "id": "schedule_02_clinic_tomorrow",
+  "track": "schedule",
+  "scenario": "clinic, confirmed for tomorrow morning",
+  "call_time": "2026-10-13T16:40:00-07:00",
+  "has_recap": true,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Oak Street Clinic?"
+    },
+    {
+      "speaker": "user",
+      "text": "Oak Street Clinic, Rosa speaking."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Rosa. I'm an AI assistant calling for Vedant. He needs a follow-up with the nurse practitioner this week, mornings if possible."
+    },
+    {
+      "speaker": "user",
+      "text": "Tomorrow morning I've got a 9:15 with Jen, the NP. After that it's Friday."
+    },
+    {
+      "speaker": "agent",
+      "text": "Tomorrow at 9:15 is good. Can you book that for Vedant?"
+    },
+    {
+      "speaker": "user",
+      "text": "Date of birth?"
+    },
+    {
+      "speaker": "agent",
+      "text": "I'd have to check on that. Can you hold it under the name and the number on file?"
+    },
+    {
+      "speaker": "user",
+      "text": "I can pull him up by name. Okay, there he is. Tomorrow, Wednesday the 14th, 9:15 a.m. You're booked."
+    },
+    {
+      "speaker": "agent",
+      "text": "Just to confirm, Wednesday October 14th at 9:15 a.m. with Jen at Oak Street Clinic. Thanks Rosa, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye bye."
+    }
+  ],
+  "expected": {
+    "track": "schedule",
+    "slot_iso": "2026-10-14T09:15:00-07:00",
+    "confirmed": true,
+    "note": null
+  },
+  "notes": "'Tomorrow' relative to a Tuesday 4:40 p.m. call is Wednesday Oct 14."
+}

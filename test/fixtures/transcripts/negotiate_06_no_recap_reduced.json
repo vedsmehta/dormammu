@@ -1,0 +1,82 @@
+{
+  "id": "negotiate_06_no_recap_reduced",
+  "track": "negotiate",
+  "scenario": "autopay credit added, agent skipped the recap",
+  "call_time": "2026-10-13T10:12:00-07:00",
+  "has_recap": false,
+  "recap_disagrees": false,
+  "turns": [
+    {
+      "speaker": "agent",
+      "text": "Hi, this is Alex, am I speaking with Ridge Mobile?"
+    },
+    {
+      "speaker": "user",
+      "text": "Ridge Mobile, this is Pat."
+    },
+    {
+      "speaker": "agent",
+      "text": "Hi Pat. I'm an AI assistant calling for Vedant. I'm calling about the account under his name and going over the bill."
+    },
+    {
+      "speaker": "user",
+      "text": "Sure, what do you need?"
+    },
+    {
+      "speaker": "agent",
+      "text": "The monthly cost is higher than what's advertised. What promotions or adjustments are available on it right now?"
+    },
+    {
+      "speaker": "user",
+      "text": "There's an autopay and paperless credit of $10 a month that isn't on here. I can add that."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is there a student rate on this account?"
+    },
+    {
+      "speaker": "user",
+      "text": "Not on this plan."
+    },
+    {
+      "speaker": "agent",
+      "text": "Is the $10 the best rate available on the account?"
+    },
+    {
+      "speaker": "user",
+      "text": "That's what I can apply without changing the plan."
+    },
+    {
+      "speaker": "agent",
+      "text": "Okay, add it please. When does it start?"
+    },
+    {
+      "speaker": "user",
+      "text": "The next bill. That generates on the 20th, so it's on there from the 20th."
+    },
+    {
+      "speaker": "agent",
+      "text": "Great. Could you email a confirmation?"
+    },
+    {
+      "speaker": "user",
+      "text": "Sure, sending now."
+    },
+    {
+      "speaker": "agent",
+      "text": "Thanks Pat, bye."
+    },
+    {
+      "speaker": "user",
+      "text": "Bye."
+    }
+  ],
+  "expected": {
+    "track": "negotiate",
+    "action": "reduced",
+    "saved_usd": 10.0,
+    "effective_date": "2026-10-20",
+    "note": null
+  },
+  "notes": "No recap. $10 a month off from the next bill on the 20th; the call is Oct 13 so that is Oct 20."
+}
