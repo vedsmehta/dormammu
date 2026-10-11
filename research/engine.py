@@ -845,9 +845,10 @@ async def _item_from_finding(ctx: _Context, category: dict, finding: VendorFindi
             if key not in index_by_key:
                 citations.append({"title": phones.host_of(proof) or "source", "url": proof, "verified": "fetched"})
                 index_by_key[key] = len(citations) - 1
-    if not phone_verified:
-        # The model's number was absent, foreign or not on any page. The vendor's own page can still
-        # settle it when it presents exactly one number (research.phones.single_page_phone).
+    if not phone_verified and not finding.phone_as_written:
+        # The model found no number. The vendor's own page can still settle it when it presents exactly
+        # one number (research.phones.single_page_phone). A number the model did report but which is not
+        # on any fetched page is dropped, never replaced: it may belong to a different vendor.
         own_hosts = {h for h in (phones.host_of(finding.website), phones.host_of(finding.phone_source_url)) if h}
         for url in candidates:
             if phones.host_of(url) not in own_hosts:
