@@ -2,6 +2,28 @@
 
 Record at 15:15. Submit by 15:45. Hard cutoff 16:00. Four people, five phones, one screen.
 
+## Status update, 15:35 PDT
+
+Since this report was written at 14:35, the pending items resolved as follows. Treat this block as
+the override where the body below says "pending".
+
+| item | state at 15:35 |
+|---|---|
+| /evidence page | live |
+| /insights page | live |
+| /calendar page | live, in the nav |
+| /calls on GET /calls | live |
+| Restyle to Aarav's design | complete, all screens |
+| Research stage API | live: POST /research, GET /proposals, POST /proposals/{id}/approve |
+| Research proposal screen | not built (hard stop); use the API or the roster path |
+| Onboarding intake fields | present on /onboarding; /profile preserves but does not edit them |
+| Seeded history (demo user) | 121 runs, 332 calls, 128 ledger rows, 954 events in Keewano |
+| Extraction eval | 24 of 24 exact, public/eval-report.json |
+| Insights report time | 1.2 s cold, cached 60 s |
+
+Demo sign-in: demo@dormammu.dev. The ask box on the dashboard still goes straight to the roster
+fan-out (act one). The research stage can be shown from the API or skipped in the video.
+
 Everything below was checked against this tree at 14:35 PDT on Oct 11 2026. Where a page is still
 being built by another lane it says "pending" and names the route it will read from, so nobody
 has to guess on camera.
