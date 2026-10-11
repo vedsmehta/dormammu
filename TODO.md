@@ -33,8 +33,6 @@ Written Oct 11 2026 on branch `aarav/next-up`. The demo flow works end to end in
 - [ ] Six dispatch tests fail when `DORMAMMU_DRY_RUN=1` is in `.env`. They pass with it unset.
 - [ ] The Keewano panel on `/evidence` shows the "looks like a personal access token" hint even
       when no token is set.
-- [ ] `components/home/PresentationLanding.tsx` has three type errors (`heroCopy`, `research`,
-      `proof` missing from its CSS module). That file and `app/present/` came from another session.
 
 ## Product gaps against the pitch
 
