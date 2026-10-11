@@ -23,13 +23,15 @@ import {
   type Vendor,
 } from "@/lib/types";
 
-// The demo roster. Phones stay blank here and are typed in through this form, never committed.
+// The demo roster, prefilled. The number comes from NEXT_PUBLIC_DEMO_VENDOR_PHONE in .env (gitignored):
+// phone numbers never go into git (BUILD-PLAN.md non-negotiable 7). Today it rings a phone in the room.
+const DEMO_PHONE = process.env.NEXT_PUBLIC_DEMO_VENDOR_PHONE ?? "";
 const DEFAULT_VENDORS: Vendor[] = [
-  { key: "movers_a", name: "Pack & Go Movers", track: "quote", phone: "", is_demo: true },
-  { key: "movers_b", name: "BearHug Moving", track: "quote", phone: "", is_demo: true },
-  { key: "movers_c", name: "Golden Gate Movers", track: "quote", phone: "", is_demo: true },
-  { key: "dentist", name: "Dr. Chen Dental", track: "schedule", phone: "", is_demo: true },
-  { key: "internet_retention", name: "Comcast Retention", track: "negotiate", phone: "", is_demo: true },
+  { key: "movers_a", name: "Pack & Go Movers", track: "quote", phone: DEMO_PHONE, is_demo: true },
+  { key: "movers_b", name: "BearHug Moving", track: "quote", phone: DEMO_PHONE, is_demo: true },
+  { key: "movers_c", name: "Golden Gate Movers", track: "quote", phone: DEMO_PHONE, is_demo: true },
+  { key: "dentist", name: "Dr. Chen Dental", track: "schedule", phone: DEMO_PHONE, is_demo: true },
+  { key: "internet_retention", name: "Comcast Retention", track: "negotiate", phone: DEMO_PHONE, is_demo: true },
 ];
 
 import { checkNumber, checkPhone, checkZip, collect, countNote, focusFirstInvalid, normalizePhone } from "@/lib/validate";
