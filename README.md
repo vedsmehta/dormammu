@@ -49,8 +49,18 @@ function in production and to `127.0.0.1:8000` in dev).
 cp test/.env.example .env     # then fill in the keys listed in docs/CONTRACT.md
 uv sync
 npm install
-uv run uvicorn server.app:app --port 8000 --reload
-npm run dev                   # http://localhost:3000
+bash scripts/dev.sh           # service on :8000 + Next dev on :3000, one terminal, Ctrl-C stops both
+bash scripts/dev.sh --dry-run # same, but never dials: every row is a labeled simulated row
+```
+
+The local loop is the debug surface. Iterate here, then `git push` and `vercel --prod` for the
+hosted copy. Both point at the same Supabase project, so a run made locally shows up in prod.
+
+Smoke test one real call before any multi-call run:
+
+```
+uv run python scripts/smoke.py          # rings TEST_CALL_TO, prints the status transitions and transcript
+uv run python scripts/preflight.py      # Dial limits, roster, warms the plan cache with the demo sentence
 ```
 
 Sign in with a magic link, seed your vendor roster on `/onboarding` (phone numbers live in the
