@@ -53,5 +53,7 @@ Written Oct 11 2026 on branch `aarav/next-up`. The demo flow works end to end in
 
 - [ ] No frontend tests. `package.json` only has `lint` and `build`.
 - [ ] GitHub issues #4 to #9 are still open although most of that work is merged.
-- [ ] `router/README.md` and `aggregator/README.md` still say "TODO: not implemented".
+- [x] `router/README.md` and `aggregator/README.md` still say "TODO: not implemented".
+- [x] `uvx ruff check .` is clean (was 14 errors, including py3.12-only f-string syntax in
+      `research/engine.py` while `requires-python` is >=3.11).
 - [ ] Form validation was added to login, onboarding and profile but not clicked through by hand.
