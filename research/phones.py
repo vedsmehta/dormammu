@@ -109,8 +109,7 @@ def url_key(url: str | None) -> str | None:
         return None
     parts = urlsplit(cleaned)
     host = parts.netloc.lower()
-    if host.startswith("www."):
-        host = host[4:]
+    host = host.removeprefix("www.")
     path = parts.path.rstrip("/") or "/"
     return urlunsplit((parts.scheme.lower(), host, path, parts.query, ""))
 
@@ -120,7 +119,7 @@ def host_of(url: str | None) -> str | None:
     if not cleaned:
         return None
     host = urlsplit(cleaned).netloc.lower()
-    return host[4:] if host.startswith("www.") else host
+    return host.removeprefix("www.")
 
 
 async def fetch_text(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> str | None:

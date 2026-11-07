@@ -468,7 +468,7 @@ async def search_structured(
                 )
             try:
                 response = await client.responses.parse(**kwargs)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not use_tool or not _is_tool_rejection(exc):
                     raise
                 _web_search_unavailable = True
@@ -604,7 +604,8 @@ def _objective(category: dict, name: str, details: dict, request: str) -> str:
     if key == "storage":
         start = f" starting{when}" if date else ""
         return f"Get {name}'s monthly price for a small unit near {city or 'the new address'}{start}, the admin fee, and any student discount."
-    return f"Call {name} about: {re.sub(r'\\s+', ' ', request or '').strip()[:200]}."
+    about = re.sub(r"\s+", " ", request or "").strip()[:200]
+    return f"Call {name} about: {about}."
 
 
 def _default_opening(category: dict, details: dict, variant: str) -> str:
@@ -1079,7 +1080,7 @@ async def research(
         return _minimal(request, [f"setup: {type(exc).__name__}: {exc}"[:200]])
     try:
         await asyncio.wait_for(_run(ctx), OVERALL_BUDGET_SECONDS)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         ctx.errors.append(f"research budget of {OVERALL_BUDGET_SECONDS:.0f} seconds exhausted; returning what finished")
     except Exception as exc:  # noqa: BLE001
         ctx.errors.append(f"research: {type(exc).__name__}: {exc}"[:200])

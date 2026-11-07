@@ -11,7 +11,14 @@ import os
 import pytest
 
 from research import engine, phones, regulations
-from research.schemas import CategoryFindings, Proposal, RegulationFindings, SourcedDiscount, SourcedPlan, VendorFinding
+from research.schemas import (
+    CategoryFindings,
+    Proposal,
+    RegulationFindings,
+    SourcedDiscount,
+    SourcedPlan,
+    VendorFinding,
+)
 
 DEMO = "I'm moving to Palo Alto on October 25 for the school year, 1-bedroom, handle the move, internet and a dentist"
 PROFILE = {
@@ -161,7 +168,7 @@ async def test_shape_json_and_verified_phone(monkeypatch):
                 ],
                 discounts=[
                     SourcedDiscount(label="Student move discount", who_qualifies="students with ID",
-                                    how_to_claim="mention it when booking", source_url=MOVER_PRICE_PAGE),  # fmt: skip
+                                    how_to_claim="mention it when booking", source_url=MOVER_PRICE_PAGE),
                     SourcedDiscount(label="Imaginary", who_qualifies="anyone", how_to_claim="ask", source_url="https://nowhere.example/x"),
                 ],
                 source_urls=[MOVER_PAGE, MOVER_PRICE_PAGE],
@@ -398,9 +405,9 @@ async def test_regulations_cached_by_state_and_citations_verified(monkeypatch):
         calls.append(schema)
         rules = [
             RegulationFinding(key="recording_consent", rule="Penal Code 632 needs all-party consent.", jurisdiction="California",
-                              applies=True, what_we_do="Disclose; do not record.", citation_title="Penal Code 632", citation_url=url),  # fmt: skip
+                              applies=True, what_we_do="Disclose; do not record.", citation_title="Penal Code 632", citation_url=url),
             RegulationFinding(key="bot_disclosure", rule="B&P 17940.", jurisdiction="California", applies=True,
-                              what_we_do="Say it is an AI.", citation_title=None, citation_url="https://made-up.example/law"),  # fmt: skip
+                              what_we_do="Say it is an AI.", citation_title=None, citation_url="https://made-up.example/law"),
         ]
         return engine.SearchResult(parsed=RegulationFindings(rules=rules), citations=[{"title": "Penal Code 632", "url": url}], web_search=True, searches=1)
 

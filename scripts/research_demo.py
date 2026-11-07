@@ -21,9 +21,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from research import phones  # noqa: E402
-from research.engine import research  # noqa: E402
-from settings import load_env, results_dir  # noqa: E402
+from research import phones
+from research.engine import research
+from settings import load_env, results_dir
 
 DEFAULT_REQUEST = (
     "I'm moving to Palo Alto on October 25 for the school year, 1-bedroom, handle the move, internet and a dentist"
